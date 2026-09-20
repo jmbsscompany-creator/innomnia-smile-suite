@@ -59,7 +59,7 @@ function Index() {
           alt=""
           width={1536}
           height={640}
-          className="absolute inset-y-0 right-0 h-full w-[70%] object-cover object-right opacity-90 sm:w-[60%]"
+          className="absolute inset-y-0 right-0 h-full w-[70%] object-cover object-right opacity-90 sm:w-[60%] lg:w-[55%]"
         />
         <div className="absolute inset-0 hero-fade" />
         <div className="relative flex min-h-[176px] flex-col justify-center px-6 py-7 sm:px-8">

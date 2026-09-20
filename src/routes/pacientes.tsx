@@ -144,7 +144,7 @@ function PatientsPage() {
                       <td className="px-4 py-3.5">
                         <Pill tone={statusTone[p.status]}>{statusText[p.status]}</Pill>
                       </td>
-                      <td className={cn("px-5 py-3.5 text-right font-semibold tabular-nums", p.balance > 0 ? "text-warning" : "text-muted-foreground")}>
+                      <td className={cn("px-5 py-3.5 text-right font-semibold tabular-nums whitespace-nowrap", p.balance > 0 ? "text-warning" : "text-muted-foreground")}>
                         {p.balance > 0 ? formatDOP(p.balance) : "Al día"}
                       </td>
                     </tr>
