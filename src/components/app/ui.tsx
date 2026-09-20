@@ -126,7 +126,14 @@ export function StatCard({
       </div>
       <div className="min-w-0">
         <p className="truncate text-sm text-muted-foreground">{label}</p>
-        <p className="mt-0.5 text-[26px] font-bold leading-none tracking-tight">{value}</p>
+        <p
+          className={cn(
+            "mt-0.5 font-bold leading-none tracking-tight whitespace-nowrap",
+            value.length > 7 ? "text-[22px]" : "text-[26px]",
+          )}
+        >
+          {value}
+        </p>
         {hint && (
           <p
             className={cn(

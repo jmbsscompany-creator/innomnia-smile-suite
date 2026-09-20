@@ -34,9 +34,9 @@ const statusText = { activo: "Activo", seguimiento: "Seguimiento", nuevo: "Nuevo
 
 function fmtDate(d: string | null) {
   if (!d) return "—";
-  const [y, m, day] = d.split("-").map(Number);
+  const [y = 0, m = 1, day = 1] = d.split("-").map(Number);
   const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-  return `${day} ${months[m - 1]} ${y}`;
+  return `${day} ${months[m - 1] ?? ""} ${y}`;
 }
 
 function PatientsPage() {
@@ -144,7 +144,7 @@ function PatientsPage() {
                       <td className="px-4 py-3.5">
                         <Pill tone={statusTone[p.status]}>{statusText[p.status]}</Pill>
                       </td>
-                      <td className={cn("px-5 py-3.5 text-right font-semibold tabular-nums", p.balance > 0 ? "text-warning" : "text-muted-foreground")}>
+                      <td className={cn("px-5 py-3.5 text-right font-semibold tabular-nums whitespace-nowrap", p.balance > 0 ? "text-warning" : "text-muted-foreground")}>
                         {p.balance > 0 ? formatDOP(p.balance) : "Al día"}
                       </td>
                     </tr>

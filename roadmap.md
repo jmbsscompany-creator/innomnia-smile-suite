@@ -1,9 +1,9 @@
 # Roadmap
 
-- [ ] Design system (white / light-blue / medium blue) per reference image
-- [ ] App shell: sidebar + topbar (search, notifications, user)
-- [ ] Inicio: greeting, stats, agenda timeline, seguimiento, actividad, quick actions, cobros DOP
-- [ ] Pacientes page
-- [ ] Citas page (calendar/list)
-- [ ] Servicios y Precios page
-- [ ] Head metadata per route
+- [x] Design system (white / light-blue / medium blue) per reference image
+- [x] App shell: sidebar + topbar (search, notifications, user)
+- [x] Inicio: greeting, stats, agenda timeline, seguimiento, actividad, quick actions, cobros DOP
+- [x] Pacientes page
+- [x] Citas page (calendar/list)
+- [x] Servicios y Precios page
+- [x] Head metadata per route

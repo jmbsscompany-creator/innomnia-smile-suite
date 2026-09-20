@@ -34,7 +34,7 @@ const dayNames = ["sábado", "domingo", "lunes", "martes", "miércoles", "jueves
 const hours = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
 
 function toMin(t: string) {
-  const [h, m] = t.split(":").map(Number);
+  const [h = 0, m = 0] = t.split(":").map(Number);
   return h * 60 + m;
 }
 
@@ -47,6 +47,7 @@ function AppointmentsPage() {
     [selected],
   );
   const totalMinutes = dayAppts.reduce((s, a) => s + a.duration, 0);
+  const dayName = dayNames[selected] ?? "";
 
   return (
     <div className="space-y-6">
@@ -165,7 +166,7 @@ function AppointmentsPage() {
         </Section>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-          <Section title={`${dayNames[selected][0].toUpperCase()}${dayNames[selected].slice(1)} ${days[selected].num} de septiembre`}>
+          <Section title={`${dayName.charAt(0).toUpperCase()}${dayName.slice(1)} ${days[selected]?.num ?? ""} de septiembre`}>
             {dayAppts.length === 0 ? (
               <EmptyState title="Sin citas este día" hint="Un buen momento para llamar a los pacientes en seguimiento." />
             ) : (
