@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 const title = "Pacientes — INNOMNIA Dental";
 const description = "Expedientes de pacientes, proximas visitas, saldos y seguimiento.";
 
-export const Route = createFileRoute("/pacientes")({
+export const Route = createFileRoute("/pacientes/")({
   head: () => ({
     meta: [
       { title },

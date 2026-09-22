@@ -13,8 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CitasRouteImport } from './routes/citas'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as PacientesRouteImport } from './routes/pacientes'
 import { Route as ServiciosRouteImport } from './routes/servicios'
+import { Route as PacientesIndexRouteImport } from './routes/pacientes.index'
 import { Route as PacientesIdRouteImport } from './routes/pacientes.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -37,15 +37,15 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PacientesRoute = PacientesRouteImport.update({
-  id: '/pacientes',
-  path: '/pacientes',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ServiciosRoute = ServiciosRouteImport.update({
   id: '/servicios',
   path: '/servicios',
   getParentRoute: () => rootRouteImport,
+} as any)
+const PacientesIndexRoute = PacientesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PacientesRoute,
 } as any)
 const PacientesIdRoute = PacientesIdRouteImport.update({
   id: '/$id',
@@ -58,18 +58,18 @@ export interface FileRoutesByFullPath {
   '/citas': typeof CitasRoute
   '/configuracion': typeof ConfiguracionRoute
   '/login': typeof LoginRoute
-  '/pacientes': typeof PacientesRouteWithChildren
   '/servicios': typeof ServiciosRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/pacientes/': typeof PacientesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/citas': typeof CitasRoute
   '/configuracion': typeof ConfiguracionRoute
   '/login': typeof LoginRoute
-  '/pacientes': typeof PacientesRouteWithChildren
   '/servicios': typeof ServiciosRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/pacientes': typeof PacientesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,9 +77,9 @@ export interface FileRoutesById {
   '/citas': typeof CitasRoute
   '/configuracion': typeof ConfiguracionRoute
   '/login': typeof LoginRoute
-  '/pacientes': typeof PacientesRouteWithChildren
   '/servicios': typeof ServiciosRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/pacientes/': typeof PacientesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -88,27 +88,27 @@ export interface FileRouteTypes {
     | '/citas'
     | '/configuracion'
     | '/login'
-    | '/pacientes'
     | '/servicios'
     | '/pacientes/$id'
+    | '/pacientes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/citas'
     | '/configuracion'
     | '/login'
-    | '/pacientes'
     | '/servicios'
     | '/pacientes/$id'
+    | '/pacientes'
   id:
     | '__root__'
     | '/'
     | '/citas'
     | '/configuracion'
     | '/login'
-    | '/pacientes'
     | '/servicios'
     | '/pacientes/$id'
+    | '/pacientes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -116,7 +116,6 @@ export interface RootRouteChildren {
   CitasRoute: typeof CitasRoute
   ConfiguracionRoute: typeof ConfiguracionRoute
   LoginRoute: typeof LoginRoute
-  PacientesRoute: typeof PacientesRouteWithChildren
   ServiciosRoute: typeof ServiciosRoute
 }
 
@@ -150,19 +149,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pacientes': {
-      id: '/pacientes'
-      path: '/pacientes'
-      fullPath: '/pacientes'
-      preLoaderRoute: typeof PacientesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/servicios': {
       id: '/servicios'
       path: '/servicios'
       fullPath: '/servicios'
       preLoaderRoute: typeof ServiciosRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/pacientes/': {
+      id: '/pacientes/'
+      path: '/'
+      fullPath: '/pacientes/'
+      preLoaderRoute: typeof PacientesIndexRouteImport
+      parentRoute: typeof PacientesRoute
     }
     '/pacientes/$id': {
       id: '/pacientes/$id'
@@ -174,24 +173,11 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface PacientesRouteChildren {
-  PacientesIdRoute: typeof PacientesIdRoute
-}
-
-const PacientesRouteChildren: PacientesRouteChildren = {
-  PacientesIdRoute: PacientesIdRoute,
-}
-
-const PacientesRouteWithChildren = PacientesRoute._addFileChildren(
-  PacientesRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CitasRoute: CitasRoute,
   ConfiguracionRoute: ConfiguracionRoute,
   LoginRoute: LoginRoute,
-  PacientesRoute: PacientesRouteWithChildren,
   ServiciosRoute: ServiciosRoute,
 }
 export const routeTree = rootRouteImport
