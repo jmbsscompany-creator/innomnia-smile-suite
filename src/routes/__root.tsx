@@ -4,6 +4,8 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -12,6 +14,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/app/AppShell";
+import { AuthProvider, useAuth } from "@/lib/auth";
 
 function NotFoundComponent() {
   return (
@@ -118,15 +121,61 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** Pantalla breve mientras se averigua si hay sesion abierta. */
+function Cargando() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-canvas">
+      <div className="text-center">
+        <span className="block text-[22px] font-extrabold tracking-[0.02em] text-primary-soft-foreground">
+          INNOMNIA
+        </span>
+        <span className="mt-1 block text-[10px] font-semibold tracking-[0.42em] text-primary">
+          DENTAL
+        </span>
+        <p className="mt-5 text-sm text-muted-foreground">Cargando...</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Decide que se ve segun haya sesion o no:
+ *  - sin sesion  -> manda al login
+ *  - con sesion  -> muestra la app completa
+ * El login se dibuja solo, sin el menu lateral.
+ */
+function AuthGate() {
+  const { session, loading } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const enLogin = pathname === "/login";
+
+  useEffect(() => {
+    if (loading) return;
+    if (!session && !enLogin) navigate({ to: "/login", replace: true });
+    if (session && enLogin) navigate({ to: "/", replace: true });
+  }, [loading, session, enLogin, navigate]);
+
+  if (loading) return <Cargando />;
+  if (enLogin) return <Outlet />;
+  if (!session) return <Cargando />; // instante mientras redirige
+
+  return (
+    <AppShell>
+      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+      <Outlet />
+    </AppShell>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AppShell>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-      </AppShell>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

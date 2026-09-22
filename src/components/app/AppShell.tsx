@@ -5,6 +5,7 @@ import {
   ChevronDown,
   FileText,
   Home,
+  LogOut,
   Menu,
   Search,
   Settings,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { clinic } from "@/lib/demo-data";
+import { useAuth } from "@/lib/auth";
 import { InitialsAvatar } from "./ui";
 
 const nav = [
@@ -125,6 +126,63 @@ function SidebarContent({ compact, onNavigate }: { compact: boolean; onNavigate?
   );
 }
 
+/** Avatar arriba a la derecha, con el nombre real y el boton de salir. */
+function UserMenu() {
+  const { profile, session, signOut } = useAuth();
+  const [abierto, setAbierto] = useState(false);
+
+  const nombre = profile?.full_name?.trim() || session?.user?.email || "Usuario";
+  const rol = profile?.role === "dentista" ? "Odontóloga" : "Secretaria";
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setAbierto((v) => !v)}
+        aria-expanded={abierto}
+        aria-haspopup="menu"
+        className="flex items-center gap-3 rounded-xl py-1 pl-1 pr-2 transition-colors hover:bg-muted"
+      >
+        <InitialsAvatar name={nombre} size="sm" className="size-10 text-sm" />
+        <span className="hidden max-w-[150px] text-left sm:block">
+          <span className="block truncate text-sm font-semibold leading-tight">{nombre}</span>
+          <span className="block text-xs text-muted-foreground">{rol}</span>
+        </span>
+        <ChevronDown className="hidden size-4 text-muted-foreground sm:block" />
+      </button>
+
+      {abierto && (
+        <>
+          {/* Capa invisible: un clic fuera cierra el menu */}
+          <button
+            aria-label="Cerrar menú"
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={() => setAbierto(false)}
+          />
+          <div
+            role="menu"
+            className="surface absolute right-0 z-50 mt-2 w-[240px] p-1.5 shadow-float"
+          >
+            <div className="border-b border-border px-3 pb-2.5 pt-2">
+              <p className="truncate text-sm font-semibold">{nombre}</p>
+              <p className="truncate text-xs text-muted-foreground">{session?.user?.email}</p>
+            </div>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setAbierto(false);
+                void signOut();
+              }}
+              className="mt-1.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-danger-soft hover:text-danger"
+            >
+              <LogOut className="size-4" /> Cerrar sesión
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -195,14 +253,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Bell className="size-5" strokeWidth={1.75} />
                 <span className="absolute right-2 top-2 size-2 rounded-full bg-primary ring-2 ring-background" />
               </button>
-              <button className="flex items-center gap-3 rounded-xl py-1 pl-1 pr-2 transition-colors hover:bg-muted">
-                <InitialsAvatar name={clinic.dentist} size="sm" className="size-10 text-sm" />
-                <span className="hidden text-left sm:block">
-                  <span className="block text-sm font-semibold leading-tight">{clinic.dentist}</span>
-                  <span className="block text-xs text-muted-foreground">{clinic.name}</span>
-                </span>
-                <ChevronDown className="hidden size-4 text-muted-foreground sm:block" />
-              </button>
+              <UserMenu />
             </div>
           </div>
         </header>

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CitasRouteImport } from './routes/citas'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as PacientesRouteImport } from './routes/pacientes'
 import { Route as ServiciosRouteImport } from './routes/servicios'
 
@@ -30,6 +31,11 @@ const ConfiguracionRoute = ConfiguracionRouteImport.update({
   path: '/configuracion',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PacientesRoute = PacientesRouteImport.update({
   id: '/pacientes',
   path: '/pacientes',
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/citas': typeof CitasRoute
   '/configuracion': typeof ConfiguracionRoute
+  '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
   '/servicios': typeof ServiciosRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/citas': typeof CitasRoute
   '/configuracion': typeof ConfiguracionRoute
+  '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
   '/servicios': typeof ServiciosRoute
 }
@@ -60,22 +68,31 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/citas': typeof CitasRoute
   '/configuracion': typeof ConfiguracionRoute
+  '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
   '/servicios': typeof ServiciosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/citas' | '/configuracion' | '/pacientes' | '/servicios'
+  fullPaths:
+    '/' | '/citas' | '/configuracion' | '/login' | '/pacientes' | '/servicios'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/citas' | '/configuracion' | '/pacientes' | '/servicios'
+  to: '/' | '/citas' | '/configuracion' | '/login' | '/pacientes' | '/servicios'
   id:
-    '__root__' | '/' | '/citas' | '/configuracion' | '/pacientes' | '/servicios'
+    | '__root__'
+    | '/'
+    | '/citas'
+    | '/configuracion'
+    | '/login'
+    | '/pacientes'
+    | '/servicios'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CitasRoute: typeof CitasRoute
   ConfiguracionRoute: typeof ConfiguracionRoute
+  LoginRoute: typeof LoginRoute
   PacientesRoute: typeof PacientesRoute
   ServiciosRoute: typeof ServiciosRoute
 }
@@ -103,6 +120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pacientes': {
       id: '/pacientes'
       path: '/pacientes'
@@ -124,6 +148,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CitasRoute: CitasRoute,
   ConfiguracionRoute: ConfiguracionRoute,
+  LoginRoute: LoginRoute,
   PacientesRoute: PacientesRoute,
   ServiciosRoute: ServiciosRoute,
 }
