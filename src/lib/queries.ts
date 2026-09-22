@@ -7,6 +7,7 @@ import type {
   ActivityItem,
   Appointment,
   ClinicSettings,
+  Dentist,
   Patient,
   Payment,
   Profile,
@@ -147,6 +148,57 @@ export function usePerfiles() {
   });
 }
 
+/* ============ DOCTORES ============ */
+
+export const CLAVE_DOCTORES = ["doctores"] as const;
+
+export function useDoctores() {
+  return useQuery({
+    queryKey: CLAVE_DOCTORES,
+    queryFn: async (): Promise<Dentist[]> => {
+      const { data, error } = await supabase
+        .from("dentists")
+        .select("*")
+        .order("name", { ascending: true });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Dentist[];
+    },
+  });
+}
+
+export interface NuevoDoctor {
+  name: string;
+  specialty: string;
+  phone: string;
+}
+
+export function useCrearDoctor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nuevo: NuevoDoctor): Promise<Dentist> => {
+      const { data, error } = await supabase.from("dentists").insert(nuevo).select().single();
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return data as Dentist;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_DOCTORES });
+    },
+  });
+}
+
+export function useActualizarDoctor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, cambios }: { id: string; cambios: Partial<Dentist> }) => {
+      const { error } = await supabase.from("dentists").update(cambios).eq("id", id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_DOCTORES });
+    },
+  });
+}
+
 /* ============ FECHA DE HOY ============ */
 
 /** Hoy en formato YYYY-MM-DD, segun el reloj de quien usa la app. */
@@ -197,6 +249,7 @@ export function useCitasDeRango(desde: string, hasta: string) {
 
 export interface NuevaCita {
   patient_id: string | null;
+  dentist_id: string | null;
   date: string;
   time: string;
   duration: number;

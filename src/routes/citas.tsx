@@ -15,6 +15,8 @@ import {
   useCambiarEstadoCita,
   useCitasDeRango,
   useCrearCita,
+  useCrearDoctor,
+  useDoctores,
   usePacientes,
   type NuevaCita,
 } from "@/lib/queries";
@@ -103,6 +105,7 @@ function minutos(hhmm: string) {
 
 const FORM_VACIO: Omit<NuevaCita, "date"> = {
   patient_id: null,
+  dentist_id: null,
   time: "09:00",
   duration: 30,
   treatment: "",
@@ -126,7 +129,9 @@ function AppointmentsPage() {
 
   const citas = useCitasDeRango(desde, hasta);
   const pacientes = usePacientes();
+  const doctores = useDoctores();
   const crear = useCrearCita();
+  const crearDoctor = useCrearDoctor();
   const cambiarEstado = useCambiarEstadoCita();
 
   const todas = citas.data ?? [];
@@ -146,6 +151,25 @@ function AppointmentsPage() {
   function nombrePaciente(id: string | null) {
     if (!id) return "Sin paciente asignado";
     return pacientes.data?.find((p) => p.id === id)?.name ?? "Paciente";
+  }
+
+  /** Prefiere el doctor de la lista; si no, el nombre suelto que se escribio. */
+  function nombreDoctor(c: Appointment) {
+    if (c.dentist_id) {
+      const d = doctores.data?.find((x) => x.id === c.dentist_id);
+      if (d) return d.name;
+    }
+    return c.dentist;
+  }
+
+  /** Agrega un doctor sin salir del formulario de la cita. */
+  async function agregarDoctor(nombre: string): Promise<string | null> {
+    try {
+      const d = await crearDoctor.mutateAsync({ name: nombre, specialty: "", phone: "" });
+      return d.id;
+    } catch {
+      return null;
+    }
   }
 
   function cambiar<K extends keyof typeof FORM_VACIO>(campo: K, valor: (typeof FORM_VACIO)[K]) {
@@ -391,7 +415,8 @@ function AppointmentsPage() {
                           {nombrePaciente(c.patient_id)}
                         </p>
                         <p className="truncate text-sm text-muted-foreground">
-                          {[c.treatment, c.dentist].filter(Boolean).join(" · ") || "Sin detalle"}
+                          {[c.treatment, nombreDoctor(c)].filter(Boolean).join(" · ") ||
+                            "Sin detalle"}
                         </p>
                       </div>
                     </div>
@@ -561,11 +586,21 @@ function AppointmentsPage() {
                   placeholder="Limpieza dental"
                 />
               </Field>
-              <Field label="Odontologo">
-                <TextInput
-                  value={form.dentist}
-                  onChange={(e) => cambiar("dentist", e.target.value)}
-                  placeholder="Dra. Saudy"
+              <Field label="Odontologo" hint="Si no esta en la lista, escribelo y lo agregas.">
+                <Buscador
+                  value={form.dentist_id}
+                  onChange={(id) => cambiar("dentist_id", id)}
+                  placeholder="Busca o escribe un doctor..."
+                  vacioTexto="Ningun doctor con ese nombre"
+                  onCrear={agregarDoctor}
+                  crearTexto="Agregar doctor"
+                  options={(doctores.data ?? [])
+                    .filter((d) => d.active)
+                    .map((d) => ({
+                      id: d.id,
+                      label: d.name,
+                      ...(d.specialty ? { hint: d.specialty } : {}),
+                    }))}
                 />
               </Field>
             </FormGrid>

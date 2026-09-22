@@ -31,8 +31,20 @@ export type ClinicSettings = {
   updated_at: string;
 };
 
+export type Dentist = {
+  id: string;
+  name: string;
+  specialty: string;
+  phone: string;
+  color: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Patient = {
   id: string;
+  file_number: string;
   name: string;
   phone: string;
   email: string;
@@ -63,6 +75,7 @@ export type Appointment = {
   id: string;
   patient_id: string | null;
   service_id: string | null;
+  dentist_id: string | null;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm:ss
   duration: number;
@@ -114,6 +127,12 @@ export type Database = {
         Row: ClinicSettings;
         Insert: Partial<ClinicSettings>;
         Update: Partial<ClinicSettings>;
+        Relationships: [];
+      };
+      dentists: {
+        Row: Dentist;
+        Insert: Partial<Insertable<Dentist>> & Pick<Dentist, "name">;
+        Update: Partial<Dentist>;
         Relationships: [];
       };
       patients: {

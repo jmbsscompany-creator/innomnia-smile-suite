@@ -17,6 +17,20 @@ export function edadDesde(nacimiento: string | null): number | null {
   return edad >= 0 && edad < 130 ? edad : null;
 }
 
+/**
+ * Deja un texto listo para comparar: sin tildes, sin mayusculas y sin
+ * espacios de sobra. Asi "Méndez", "MENDEZ" y "mendez" son lo mismo
+ * al buscar. Hace falta porque los nombres vienen escritos de mil formas,
+ * sobre todo si salen de un Excel viejo.
+ */
+export function normalizar(texto: string): string {
+  return texto
+    .normalize("NFD") // separa la letra de su tilde
+    .replace(/[̀-ͯ]/g, "") // borra las tildes
+    .toLowerCase()
+    .trim();
+}
+
 export function initials(name: string): string {
   return name
     .split(" ")

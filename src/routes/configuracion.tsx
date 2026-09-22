@@ -1,11 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Lock, ShieldCheck, TriangleAlert, Users } from "lucide-react";
+import { Check, Lock, Plus, ShieldCheck, Stethoscope, TriangleAlert, Users, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import type { ClinicSettings } from "@/lib/database.types";
-import { useActualizarClinica, useClinica, usePerfiles } from "@/lib/queries";
+import {
+  useActualizarClinica,
+  useActualizarDoctor,
+  useClinica,
+  useCrearDoctor,
+  useDoctores,
+  usePerfiles,
+} from "@/lib/queries";
 import { useAuth } from "@/lib/auth";
 import { Button, InitialsAvatar, PageHeader, Pill, Section } from "@/components/app/ui";
-import { Field, TextInput } from "@/components/app/form";
+import { Field, FormGrid, TextInput } from "@/components/app/form";
+import { cn } from "@/lib/utils";
 
 const title = "Configuración — INNOMNIA Dental";
 const description = "Datos de la clinica, horarios de atencion y quien tiene acceso.";
@@ -23,6 +31,19 @@ export const Route = createFileRoute("/configuracion")({
 });
 
 const DIAS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
+
+/** Sugerencias; se puede escribir cualquier otra. */
+const ESPECIALIDADES = [
+  "Odontologia general",
+  "Ortodoncia",
+  "Endodoncia",
+  "Periodoncia",
+  "Cirugia oral",
+  "Odontopediatria",
+  "Implantologia",
+  "Protesis",
+  "Estetica dental",
+];
 
 const HORARIO_POR_DEFECTO = DIAS.map((day) => ({
   day,
@@ -55,6 +76,26 @@ function SettingsPage() {
   const { data, isPending, isError, error, refetch } = useClinica();
   const perfiles = usePerfiles();
   const guardar = useActualizarClinica();
+
+  const doctores = useDoctores();
+  const crearDoctor = useCrearDoctor();
+  const actualizarDoctor = useActualizarDoctor();
+  const [nuevoDoc, setNuevoDoc] = useState({ name: "", specialty: "" });
+
+  async function agregarDoctor(e: FormEvent) {
+    e.preventDefault();
+    if (!nuevoDoc.name.trim()) return;
+    try {
+      await crearDoctor.mutateAsync({
+        name: nuevoDoc.name.trim(),
+        specialty: nuevoDoc.specialty.trim(),
+        phone: "",
+      });
+      setNuevoDoc({ name: "", specialty: "" });
+    } catch {
+      // El error se muestra bajo el formulario.
+    }
+  }
 
   const [form, setForm] = useState<FormClinica>(VACIO);
   const [guardado, setGuardado] = useState(false);
@@ -244,6 +285,86 @@ function SettingsPage() {
                 El horario se guarda con el boton de la izquierda, junto con los demas datos.
               </p>
             )}
+          </Section>
+
+          <Section title="Doctores de la clinica">
+            {doctores.isPending ? (
+              <div className="h-14 animate-pulse rounded-lg bg-muted" aria-hidden />
+            ) : (doctores.data?.length ?? 0) === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                Todavia no hay doctores. Agrega el primero abajo.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {(doctores.data ?? []).map((d) => (
+                  <li key={d.id} className="flex items-center gap-3 py-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                      <Stethoscope className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          "truncate text-[15px] font-medium",
+                          !d.active && "line-through opacity-60",
+                        )}
+                      >
+                        {d.name}
+                      </p>
+                      {d.specialty && (
+                        <p className="truncate text-sm text-muted-foreground">{d.specialty}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        actualizarDoctor.mutate({ id: d.id, cambios: { active: !d.active } })
+                      }
+                      className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {d.active ? "Desactivar" : "Activar"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <form onSubmit={agregarDoctor} className="mt-4 space-y-3 border-t border-border pt-4">
+              <FormGrid>
+                <Field label="Nombre del doctor">
+                  <TextInput
+                    value={nuevoDoc.name}
+                    onChange={(e) => setNuevoDoc((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Dra. Saudy Mabel"
+                  />
+                </Field>
+                <Field label="Especialidad" hint="Opcional.">
+                  <TextInput
+                    value={nuevoDoc.specialty}
+                    onChange={(e) => setNuevoDoc((p) => ({ ...p, specialty: e.target.value }))}
+                    placeholder="Ortodoncia"
+                    list="lista-especialidades"
+                  />
+                  <datalist id="lista-especialidades">
+                    {ESPECIALIDADES.map((x) => (
+                      <option key={x} value={x} />
+                    ))}
+                  </datalist>
+                </Field>
+              </FormGrid>
+              <Button type="submit" variant="soft" disabled={crearDoctor.isPending}>
+                <Plus /> {crearDoctor.isPending ? "Agregando..." : "Agregar doctor"}
+              </Button>
+              {crearDoctor.isError && (
+                <p role="alert" className="text-sm text-danger">
+                  {crearDoctor.error.message}
+                </p>
+              )}
+            </form>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Desactivar a un doctor lo saca de la lista al agendar, pero conserva sus citas
+              anteriores.
+            </p>
           </Section>
 
           <Section title="Quien tiene acceso">

@@ -1,6 +1,7 @@
-import { Check, ChevronDown, Search, X } from "lucide-react";
+import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { normalizar } from "@/lib/format";
 import { Button } from "@/components/app/ui";
 
 /* ---------- Modal ---------- */
@@ -181,6 +182,8 @@ export function Buscador({
   required,
   name,
   maxVisibles = 50,
+  onCrear,
+  crearTexto = "Agregar",
 }: {
   value: string | null;
   onChange: (id: string | null) => void;
@@ -190,24 +193,49 @@ export function Buscador({
   required?: boolean | undefined;
   name?: string | undefined;
   maxVisibles?: number | undefined;
+  /**
+   * Si se pasa, cuando lo escrito no coincide con nada aparece la opcion
+   * de crearlo ahi mismo. Devuelve el id de lo recien creado para dejarlo
+   * seleccionado. Asi la secretaria agrega un doctor sin salir del formulario.
+   */
+  onCrear?: ((nombre: string) => Promise<string | null>) | undefined;
+  crearTexto?: string | undefined;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [texto, setTexto] = useState("");
   const [resaltado, setResaltado] = useState(0);
+  const [creando, setCreando] = useState(false);
   const caja = useRef<HTMLDivElement>(null);
 
   const elegido = options.find((o) => o.id === value) ?? null;
 
   const filtradas = useMemo(() => {
-    const q = texto.trim().toLowerCase();
+    // Sin tildes y sin mayusculas: "mendez" encuentra a "Méndez".
+    const q = normalizar(texto);
     if (!q) return options;
     return options.filter(
-      (o) => o.label.toLowerCase().includes(q) || (o.hint ?? "").toLowerCase().includes(q),
+      (o) => normalizar(o.label).includes(q) || normalizar(o.hint ?? "").includes(q),
     );
   }, [options, texto]);
 
   const visibles = filtradas.slice(0, maxVisibles);
   const ocultas = filtradas.length - visibles.length;
+
+  const escrito = texto.trim();
+  const yaExiste = options.some((o) => normalizar(o.label) === normalizar(escrito));
+  const ofrecerCrear = !!onCrear && escrito.length > 1 && !yaExiste;
+
+  async function crear() {
+    if (!onCrear) return;
+    setCreando(true);
+    const id = await onCrear(escrito);
+    setCreando(false);
+    if (id) {
+      onChange(id);
+      setTexto("");
+      setAbierto(false);
+    }
+  }
 
   // Un clic fuera cierra la lista.
   useEffect(() => {
@@ -305,7 +333,7 @@ export function Buscador({
 
       {abierto && !elegido && (
         <div className="mt-1.5 overflow-hidden rounded-xl border border-border bg-card shadow-float">
-          {visibles.length === 0 ? (
+          {visibles.length === 0 && !ofrecerCrear ? (
             <p className="px-3.5 py-4 text-center text-sm text-muted-foreground">{vacioTexto}</p>
           ) : (
             <ul className="max-h-[240px] overflow-y-auto">
@@ -330,6 +358,17 @@ export function Buscador({
                 </li>
               ))}
             </ul>
+          )}
+          {ofrecerCrear && (
+            <button
+              type="button"
+              onClick={() => void crear()}
+              disabled={creando}
+              className="flex w-full items-center gap-2 border-t border-border bg-primary-soft/40 px-3.5 py-3 text-left text-sm font-semibold text-primary transition-colors hover:bg-primary-soft disabled:opacity-60"
+            >
+              <Plus className="size-4 shrink-0" />
+              {creando ? "Guardando..." : `${crearTexto} "${escrito}"`}
+            </button>
           )}
           {ocultas > 0 && (
             <p className="border-t border-border bg-muted/40 px-3.5 py-2 text-center text-xs text-muted-foreground">
