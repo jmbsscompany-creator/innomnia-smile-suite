@@ -3,7 +3,7 @@
 // avisar mientras carga y volver a pedir los datos cuando algo cambia.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import type { ActivityItem, Appointment, Patient, Payment } from "@/lib/database.types";
+import type { ActivityItem, Appointment, Patient, Payment, Service } from "@/lib/database.types";
 
 /** Traduce los errores de la base, que vienen en ingles. */
 export function traducirErrorDB(mensaje: string): string {
@@ -157,6 +157,74 @@ export function useCambiarEstadoCita() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: CLAVE_CITAS });
+    },
+  });
+}
+
+/* ============ SERVICIOS ============ */
+
+export const CLAVE_SERVICIOS = ["servicios"] as const;
+
+export function useServicios() {
+  return useQuery({
+    queryKey: CLAVE_SERVICIOS,
+    queryFn: async (): Promise<Service[]> => {
+      const { data, error } = await supabase
+        .from("services")
+        .select("*")
+        .order("category", { ascending: true })
+        .order("name", { ascending: true });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Service[];
+    },
+  });
+}
+
+export interface NuevoServicio {
+  name: string;
+  category: string;
+  duration: number;
+  price: number;
+  description: string;
+}
+
+export function useCrearServicio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nuevo: NuevoServicio): Promise<Service> => {
+      const { data, error } = await supabase.from("services").insert(nuevo).select().single();
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return data as Service;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_SERVICIOS });
+    },
+  });
+}
+
+export function useActualizarServicio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, cambios }: { id: string; cambios: Partial<Service> }) => {
+      const { error } = await supabase.from("services").update(cambios).eq("id", id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_SERVICIOS });
+    },
+  });
+}
+
+/** Carga de golpe la lista base de servicios, para no escribirlos a mano. */
+export function useCargarServiciosBase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (lista: NuevoServicio[]) => {
+      const { error } = await supabase.from("services").insert(lista as never);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_SERVICIOS });
     },
   });
 }
