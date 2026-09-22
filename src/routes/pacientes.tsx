@@ -3,7 +3,7 @@ import { Phone, Search, TriangleAlert, UserPlus, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import type { Patient } from "@/lib/database.types";
 import { usePacientes, useCrearPaciente, type NuevoPaciente } from "@/lib/queries";
-import { edadDesde, formatDOP } from "@/lib/format";
+import { edadDesde, formatDOP, normalizar } from "@/lib/format";
 import { formatShortDate } from "@/lib/dates";
 import { Button, EmptyState, InitialsAvatar, PageHeader, Pill } from "@/components/app/ui";
 import {
@@ -32,7 +32,21 @@ export const Route = createFileRoute("/pacientes")({
   component: PatientsPage,
 });
 
-type Filtro = "todos" | Patient["status"];
+type Filtro = "todos" | "incompleta" | Patient["status"];
+
+/**
+ * Que le falta a una ficha para estar completa.
+ * Telefono y fecha de nacimiento son los dos que importan de verdad:
+ * sin telefono no puedes llamar al paciente, y sin fecha de nacimiento
+ * no sabes su edad, que en odontologia cambia el tratamiento.
+ * El correo y el tratamiento se dejan opcionales a proposito.
+ */
+export function faltantes(p: Patient): string[] {
+  const falta: string[] = [];
+  if (!p.phone.trim()) falta.push("telefono");
+  if (!p.birth_date) falta.push("fecha de nacimiento");
+  return falta;
+}
 
 const filtros: { key: Filtro; label: string }[] = [
   { key: "todos", label: "Todos" },
@@ -45,6 +59,7 @@ const tonoEstado = { activo: "success", seguimiento: "warning", nuevo: "info" } 
 const textoEstado = { activo: "Activo", seguimiento: "Seguimiento", nuevo: "Nuevo" } as const;
 
 const FORM_VACIO: NuevoPaciente = {
+  file_number: "",
   name: "",
   phone: "",
   email: "",
@@ -82,16 +97,32 @@ function PatientsPage() {
 
   const lista = useMemo(() => {
     const todos = pacientes ?? [];
-    const texto = q.trim().toLowerCase();
-    return todos.filter(
-      (p) =>
-        (filtro === "todos" || p.status === filtro) &&
-        (texto === "" ||
-          p.name.toLowerCase().includes(texto) ||
-          p.phone.includes(q.trim()) ||
-          p.treatment.toLowerCase().includes(texto)),
-    );
+    // Sin tildes: "mendez" encuentra "Méndez". Busca por nombre, apellido,
+    // numero de ficha, telefono, tratamiento y correo, todo a la vez.
+    const texto = normalizar(q);
+    return todos.filter((p) => {
+      const pasaFiltro =
+        filtro === "todos"
+          ? true
+          : filtro === "incompleta"
+            ? faltantes(p).length > 0
+            : p.status === filtro;
+      if (!pasaFiltro) return false;
+      if (texto === "") return true;
+      return (
+        normalizar(p.name).includes(texto) ||
+        normalizar(p.file_number).includes(texto) ||
+        normalizar(p.phone).includes(texto) ||
+        normalizar(p.treatment).includes(texto) ||
+        normalizar(p.email).includes(texto)
+      );
+    });
   }, [pacientes, q, filtro]);
+
+  const incompletas = useMemo(
+    () => (pacientes ?? []).filter((p) => faltantes(p).length > 0).length,
+    [pacientes],
+  );
 
   const sinNinguno = !isPending && !isError && (pacientes?.length ?? 0) === 0;
   const enSeguimiento = (pacientes ?? []).filter((p) => p.status === "seguimiento").length;
@@ -144,7 +175,7 @@ function PatientsPage() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por nombre, telefono o tratamiento"
+                placeholder="Buscar por nombre, apellido, ficha, telefono o tratamiento"
                 className="ml-2.5 w-full bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
               />
             </label>
@@ -163,6 +194,21 @@ function PatientsPage() {
                   {f.label}
                 </button>
               ))}
+              {incompletas > 0 && (
+                <button
+                  onClick={() => setFiltro(filtro === "incompleta" ? "todos" : "incompleta")}
+                  className={cn(
+                    "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-colors",
+                    filtro === "incompleta"
+                      ? "bg-warning text-primary-foreground"
+                      : "bg-warning-soft text-warning hover:brightness-95",
+                  )}
+                >
+                  <TriangleAlert className="size-3.5" />
+                  Sin completar
+                  <span className="tabular-nums opacity-80">({incompletas})</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -196,7 +242,16 @@ function PatientsPage() {
         ) : lista.length === 0 ? (
           /* Hay pacientes, pero el filtro o la busqueda no encontro ninguno */
           <div className="mt-4">
-            <EmptyState title="Sin resultados" hint="Prueba con otro nombre o cambia el filtro." />
+            <EmptyState
+              title={
+                filtro === "incompleta" ? "Todas las fichas estan completas" : "Sin resultados"
+              }
+              hint={
+                filtro === "incompleta"
+                  ? "No queda ningun paciente con datos por llenar."
+                  : "Prueba con otro nombre o cambia el filtro."
+              }
+            />
           </div>
         ) : (
           <>
@@ -216,17 +271,33 @@ function PatientsPage() {
                 <tbody className="divide-y divide-border">
                   {lista.map((p) => {
                     const edad = edadDesde(p.birth_date);
+                    const falta = faltantes(p);
                     return (
                       <tr key={p.id} className="transition-colors hover:bg-primary-soft/40">
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
                             <InitialsAvatar name={p.name} size="sm" className="size-10 text-sm" />
                             <div className="min-w-0">
-                              <p className="truncate font-semibold">{p.name}</p>
+                              <p className="flex items-center gap-2 truncate font-semibold">
+                                {p.name}
+                                {falta.length > 0 && (
+                                  <span
+                                    title={`Falta: ${falta.join(" y ")}`}
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-md bg-warning-soft px-1.5 py-0.5 text-[11px] font-semibold text-warning"
+                                  >
+                                    <TriangleAlert className="size-3" /> Incompleta
+                                  </span>
+                                )}
+                              </p>
                               <p className="truncate text-sm text-muted-foreground">
-                                {[edad !== null ? `${edad} anos` : null, p.treatment || null]
+                                {[
+                                  p.file_number ? `#${p.file_number}` : null,
+                                  edad !== null ? `${edad} anos` : null,
+                                  p.treatment || null,
+                                ]
                                   .filter(Boolean)
-                                  .join(" · ") || "Sin tratamiento registrado"}
+                                  .join(" · ") ||
+                                  (falta.length > 0 ? `Falta ${falta.join(" y ")}` : "Sin datos")}
                               </p>
                             </div>
                           </div>
@@ -271,9 +342,16 @@ function PatientsPage() {
                   <InitialsAvatar name={p.name} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">{p.name}</p>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {p.treatment || "Sin tratamiento"} · prox. {formatShortDate(p.next_visit)}
-                    </p>
+                    {faltantes(p).length > 0 ? (
+                      <p className="inline-flex items-center gap-1 text-sm font-medium text-warning">
+                        <TriangleAlert className="size-3.5" /> Falta {faltantes(p).join(" y ")}
+                      </p>
+                    ) : (
+                      <p className="truncate text-sm text-muted-foreground">
+                        {p.file_number ? `#${p.file_number} · ` : ""}
+                        {p.treatment || "Sin tratamiento"}
+                      </p>
+                    )}
                   </div>
                   <div className="shrink-0 text-right">
                     <Pill tone={tonoEstado[p.status]}>{textoEstado[p.status]}</Pill>
@@ -310,15 +388,24 @@ function PatientsPage() {
         }
       >
         <form id="form-paciente" onSubmit={guardar} className="space-y-4">
-          <Field label="Nombre completo">
-            <TextInput
-              value={form.name}
-              onChange={(e) => cambiar("name", e.target.value)}
-              placeholder="Ana Lopez"
-              autoFocus
-              required
-            />
-          </Field>
+          <FormGrid className="sm:grid-cols-[1fr_140px]">
+            <Field label="Nombre completo">
+              <TextInput
+                value={form.name}
+                onChange={(e) => cambiar("name", e.target.value)}
+                placeholder="Ana Lopez"
+                autoFocus
+                required
+              />
+            </Field>
+            <Field label="Numero de ficha" hint="Opcional.">
+              <TextInput
+                value={form.file_number}
+                onChange={(e) => cambiar("file_number", e.target.value)}
+                placeholder="0847"
+              />
+            </Field>
+          </FormGrid>
 
           <FormGrid>
             <Field label="Telefono">

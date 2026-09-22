@@ -62,6 +62,7 @@ export function usePacientes() {
 
 /** Lo que el formulario envia al crear un paciente. */
 export interface NuevoPaciente {
+  file_number: string;
   name: string;
   phone: string;
   email: string;

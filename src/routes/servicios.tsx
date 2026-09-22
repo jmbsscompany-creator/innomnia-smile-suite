@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Clock, FileText, Pencil, Plus, Sparkles, TriangleAlert } from "lucide-react";
+import { Clock, FileText, Pencil, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import type { Service } from "@/lib/database.types";
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/lib/queries";
 import { CATEGORIAS_SUGERIDAS, SERVICIOS_BASE } from "@/lib/servicios-base";
 import { useAuth } from "@/lib/auth";
-import { formatDOP } from "@/lib/format";
+import { formatDOP, normalizar } from "@/lib/format";
 import { Button, PageHeader, Section } from "@/components/app/ui";
 import { Field, FormGrid, Modal, ModalActions, TextArea, TextInput } from "@/components/app/form";
 import { cn } from "@/lib/utils";
@@ -48,6 +48,7 @@ function ServicesPage() {
   const cargarBase = useCargarServiciosBase();
 
   const [cat, setCat] = useState("Todos");
+  const [q, setQ] = useState("");
   const [abierto, setAbierto] = useState(false);
   const [editando, setEditando] = useState<Service | null>(null);
   const [form, setForm] = useState<NuevoServicio>(FORM_VACIO);
@@ -61,6 +62,20 @@ function ServicesPage() {
     [servicios],
   );
   const visibles = cat === "Todos" ? categorias : [cat];
+
+  // Busca por nombre, categoria, descripcion y tambien por precio:
+  // escribir "3500" encuentra los tratamientos que cuestan RD$ 3,500.
+  const encontrados = useMemo(() => {
+    const texto = normalizar(q);
+    if (!texto) return servicios;
+    return servicios.filter(
+      (s) =>
+        normalizar(s.name).includes(texto) ||
+        normalizar(s.category).includes(texto) ||
+        normalizar(s.description).includes(texto) ||
+        String(s.price).includes(texto.replace(/[^0-9]/g, "")),
+    );
+  }, [servicios, q]);
 
   function cambiar<K extends keyof NuevoServicio>(campo: K, valor: NuevoServicio[K]) {
     setForm((prev) => ({ ...prev, [campo]: valor }));
@@ -202,6 +217,16 @@ function ServicesPage() {
 
       {!vacio && !isPending && !isError && (
         <>
+          <label className="relative flex h-11 items-center rounded-xl border border-input bg-card px-3.5 text-muted-foreground focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-ring/30">
+            <Search className="size-[18px] shrink-0" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar tratamiento, categoria o precio..."
+              className="ml-2.5 w-full min-w-0 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {["Todos", ...categorias].map((c) => (
               <button
@@ -219,9 +244,15 @@ function ServicesPage() {
             ))}
           </div>
 
+          {encontrados.length === 0 && (
+            <p className="surface px-4 py-10 text-center text-sm text-muted-foreground">
+              Ningun tratamiento coincide con "{q}".
+            </p>
+          )}
+
           <div className="grid gap-6 xl:grid-cols-2">
             {visibles.map((c) => {
-              const items = servicios.filter((s) => s.category === c);
+              const items = encontrados.filter((s) => s.category === c);
               if (items.length === 0) return null;
               return (
                 <Section key={c} title={c} padded={false}>
