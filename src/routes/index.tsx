@@ -18,6 +18,7 @@ import {
   hoyISO,
   useActividad,
   useCitasDelDia,
+  useClinica,
   useCobrosDelDia,
   useCrearCobro,
   usePacientes,
@@ -107,6 +108,7 @@ function Index() {
   const citas = useCitasDelDia(hoy);
   const cobros = useCobrosDelDia(hoy);
   const actividad = useActividad();
+  const clinica = useClinica();
   const crearCobro = useCrearCobro();
 
   const [cobroAbierto, setCobroAbierto] = useState(false);
@@ -154,9 +156,15 @@ function Index() {
   const cargando = pacientes.isPending || citas.isPending;
   const fallo = pacientes.isError || citas.isError;
 
-  const nombre = profile?.full_name
-    ? primerNombre(profile.full_name)
-    : (session?.user?.email?.split("@")[0] ?? "");
+  /**
+   * El sistema es de la clinica, no de una persona: saluda con el nombre
+   * de la clinica ("Buenos dias, Medent"). Si todavia no lo han puesto en
+   * Configuracion, cae al nombre de quien entro para no saludar en seco.
+   */
+  const nombre =
+    clinica.data?.name?.trim() ||
+    (profile?.full_name ? primerNombre(profile.full_name) : "") ||
+    (session?.user?.email?.split("@")[0] ?? "");
 
   return (
     <div className="space-y-6">
