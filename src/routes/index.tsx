@@ -11,11 +11,30 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import { useState, type FormEvent } from "react";
 import heroImg from "@/assets/clinic-hero.jpg";
 import { useAuth } from "@/lib/auth";
-import { hoyISO, useActividad, useCitasDelDia, useCobrosDelDia, usePacientes } from "@/lib/queries";
+import {
+  hoyISO,
+  useActividad,
+  useCitasDelDia,
+  useCobrosDelDia,
+  useCrearCobro,
+  usePacientes,
+  type NuevoCobro,
+} from "@/lib/queries";
 import { formatDOP } from "@/lib/format";
 import { Button, InitialsAvatar, Pill, Section, StatCard, StatusBadge } from "@/components/app/ui";
+import {
+  Buscador,
+  Field,
+  FormGrid,
+  Modal,
+  ModalActions,
+  SelectInput,
+  TextArea,
+  TextInput,
+} from "@/components/app/form";
 import { cn } from "@/lib/utils";
 
 const title = "Inicio — INNOMNIA Dental";
@@ -71,6 +90,14 @@ function primerNombre(completo: string) {
   return partes[0] ?? completo;
 }
 
+const COBRO_VACIO: Omit<NuevoCobro, "date"> = {
+  patient_id: null,
+  concept: "",
+  method: "efectivo",
+  amount: 0,
+  notes: "",
+};
+
 function Index() {
   const { profile, session } = useAuth();
   const hoy = hoyISO();
@@ -80,6 +107,39 @@ function Index() {
   const citas = useCitasDelDia(hoy);
   const cobros = useCobrosDelDia(hoy);
   const actividad = useActividad();
+  const crearCobro = useCrearCobro();
+
+  const [cobroAbierto, setCobroAbierto] = useState(false);
+  const [formCobro, setFormCobro] = useState(COBRO_VACIO);
+
+  function cambiarCobro<K extends keyof typeof COBRO_VACIO>(
+    campo: K,
+    valor: (typeof COBRO_VACIO)[K],
+  ) {
+    setFormCobro((prev) => ({ ...prev, [campo]: valor }));
+  }
+
+  function abrirCobro() {
+    setFormCobro(COBRO_VACIO);
+    crearCobro.reset();
+    setCobroAbierto(true);
+  }
+
+  function cerrarCobro() {
+    setCobroAbierto(false);
+    setFormCobro(COBRO_VACIO);
+    crearCobro.reset();
+  }
+
+  async function guardarCobro(e: FormEvent) {
+    e.preventDefault();
+    try {
+      await crearCobro.mutateAsync({ ...formCobro, date: hoy });
+      cerrarCobro();
+    } catch {
+      // El error se muestra dentro del modal.
+    }
+  }
 
   const listaCitas = citas.data ?? [];
   const listaPacientes = pacientes.data ?? [];
@@ -330,6 +390,16 @@ function Index() {
                 ))}
               </ul>
             )}
+            <Button
+              variant="soft"
+              size="lg"
+              className="mt-4 w-full"
+              disabled={listaPacientes.length === 0}
+              onClick={abrirCobro}
+            >
+              <Wallet />{" "}
+              {listaPacientes.length === 0 ? "Registra un paciente primero" : "Registrar cobro"}
+            </Button>
           </Section>
         </div>
       </div>
@@ -415,6 +485,93 @@ function Index() {
           </Link>
         ))}
       </div>
+
+      {/* Registrar un cobro */}
+      <Modal
+        open={cobroAbierto}
+        onClose={cerrarCobro}
+        title="Registrar cobro"
+        description="Esto anota que el paciente pago. No procesa tarjetas ni mueve dinero."
+        footer={
+          <ModalActions
+            onCancel={cerrarCobro}
+            formId="form-cobro"
+            disabled={crearCobro.isPending}
+            submitLabel={crearCobro.isPending ? "Guardando..." : "Registrar cobro"}
+          />
+        }
+      >
+        <form id="form-cobro" onSubmit={guardarCobro} className="space-y-4">
+          <Field label="Paciente">
+            <Buscador
+              value={formCobro.patient_id}
+              onChange={(id) => cambiarCobro("patient_id", id)}
+              placeholder="Escribe el nombre del paciente..."
+              vacioTexto="Ningun paciente con ese nombre"
+              required
+              options={listaPacientes.map((p) => ({
+                id: p.id,
+                label: p.name,
+                ...(Number(p.balance) > 0 ? { hint: `debe ${formatDOP(Number(p.balance))}` } : {}),
+              }))}
+            />
+          </Field>
+
+          <FormGrid>
+            <Field label="Monto en RD$">
+              <TextInput
+                type="number"
+                min={1}
+                step={100}
+                value={String(formCobro.amount)}
+                onChange={(e) => cambiarCobro("amount", Number(e.target.value))}
+                required
+              />
+            </Field>
+            <Field label="Forma de pago">
+              <SelectInput
+                value={formCobro.method}
+                onChange={(e) => cambiarCobro("method", e.target.value as NuevoCobro["method"])}
+              >
+                <option value="efectivo">Efectivo</option>
+                <option value="tarjeta">Tarjeta</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="seguro">Seguro</option>
+              </SelectInput>
+            </Field>
+          </FormGrid>
+
+          <Field label="Concepto" hint="Por que esta pagando.">
+            <TextInput
+              value={formCobro.concept}
+              onChange={(e) => cambiarCobro("concept", e.target.value)}
+              placeholder="Limpieza dental"
+            />
+          </Field>
+
+          <Field label="Notas">
+            <TextArea
+              value={formCobro.notes}
+              onChange={(e) => cambiarCobro("notes", e.target.value)}
+              placeholder="Abono parcial, numero de recibo, etc."
+            />
+          </Field>
+
+          <p className="rounded-xl bg-primary-soft/50 px-3.5 py-3 text-sm text-muted-foreground">
+            Al guardar, el monto se le descuenta del saldo pendiente al paciente.
+          </p>
+
+          {crearCobro.isError && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-xl bg-danger-soft px-3.5 py-3 text-sm text-danger"
+            >
+              <TriangleAlert className="mt-px size-4 shrink-0" />
+              <span>{crearCobro.error.message}</span>
+            </p>
+          )}
+        </form>
+      </Modal>
     </div>
   );
 }

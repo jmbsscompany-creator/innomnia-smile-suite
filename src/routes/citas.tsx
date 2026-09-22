@@ -20,6 +20,7 @@ import {
 } from "@/lib/queries";
 import { Button, InitialsAvatar, PageHeader, Section, StatusBadge } from "@/components/app/ui";
 import {
+  Buscador,
   Field,
   FormGrid,
   Modal,
@@ -515,18 +516,18 @@ function AppointmentsPage() {
         ) : (
           <form id="form-cita" onSubmit={guardar} className="space-y-4">
             <Field label="Paciente">
-              <SelectInput
-                value={form.patient_id ?? ""}
-                onChange={(e) => cambiar("patient_id", e.target.value || null)}
+              <Buscador
+                value={form.patient_id}
+                onChange={(id) => cambiar("patient_id", id)}
+                placeholder="Escribe el nombre del paciente..."
+                vacioTexto="Ningun paciente con ese nombre"
                 required
-              >
-                <option value="">Elige un paciente...</option>
-                {(pacientes.data ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </SelectInput>
+                options={(pacientes.data ?? []).map((p) => ({
+                  id: p.id,
+                  label: p.name,
+                  ...(p.phone ? { hint: p.phone } : {}),
+                }))}
+              />
             </Field>
 
             <FormGrid>

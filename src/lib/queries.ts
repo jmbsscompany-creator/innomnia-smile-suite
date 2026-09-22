@@ -22,16 +22,31 @@ export function traducirErrorDB(mensaje: string): string {
 
 export const CLAVE_PACIENTES = ["pacientes"] as const;
 
+/**
+ * OJO: Supabase corta cualquier consulta en 1000 filas, aunque no pidas limite.
+ * Con 1200 pacientes, una consulta normal devolveria 1000 y los otros 200
+ * quedarian invisibles, sin dar ningun error. Por eso pedimos por tandas
+ * hasta que una venga incompleta, que es la senal de que ya no hay mas.
+ */
+const TAMANO_TANDA = 1000;
+
 export function usePacientes() {
   return useQuery({
     queryKey: CLAVE_PACIENTES,
     queryFn: async (): Promise<Patient[]> => {
-      const { data, error } = await supabase
-        .from("patients")
-        .select("*")
-        .order("name", { ascending: true });
-      if (error) throw new Error(traducirErrorDB(error.message));
-      return (data ?? []) as Patient[];
+      const todos: Patient[] = [];
+      for (let desde = 0; ; desde += TAMANO_TANDA) {
+        const { data, error } = await supabase
+          .from("patients")
+          .select("*")
+          .order("name", { ascending: true })
+          .range(desde, desde + TAMANO_TANDA - 1);
+        if (error) throw new Error(traducirErrorDB(error.message));
+        const tanda = (data ?? []) as Patient[];
+        todos.push(...tanda);
+        if (tanda.length < TAMANO_TANDA) break;
+      }
+      return todos;
     },
   });
 }
@@ -53,11 +68,13 @@ export function useCrearPaciente() {
     mutationFn: async (nuevo: NuevoPaciente): Promise<Patient> => {
       const { data, error } = await supabase.from("patients").insert(nuevo).select().single();
       if (error) throw new Error(traducirErrorDB(error.message));
+      await registrarActividad("paciente", "Nuevo paciente", (data as Patient).name);
       return data as Patient;
     },
     // Al terminar, vuelve a pedir la lista para que aparezca el nuevo.
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: CLAVE_PACIENTES });
+      void qc.invalidateQueries({ queryKey: ["actividad"] });
     },
   });
 }
@@ -140,10 +157,16 @@ export function useCrearCita() {
     mutationFn: async (nueva: NuevaCita): Promise<Appointment> => {
       const { data, error } = await supabase.from("appointments").insert(nueva).select().single();
       if (error) throw new Error(traducirErrorDB(error.message));
+      await registrarActividad(
+        "cita",
+        "Nueva cita agendada",
+        `${nueva.treatment || "Cita"} · ${nueva.date} ${nueva.time.slice(0, 5)}`,
+      );
       return data as Appointment;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: CLAVE_CITAS });
+      void qc.invalidateQueries({ queryKey: ["actividad"] });
     },
   });
 }
@@ -248,7 +271,69 @@ export function useCobrosDelDia(fecha: string) {
   });
 }
 
+export interface NuevoCobro {
+  patient_id: string | null;
+  concept: string;
+  method: Payment["method"];
+  amount: number;
+  date: string;
+  notes: string;
+}
+
+/**
+ * Registra un cobro y le descuenta el monto al saldo del paciente.
+ * Son dos pasos: primero guarda el cobro, despues ajusta el saldo.
+ */
+export function useCrearCobro() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nuevo: NuevoCobro): Promise<Payment> => {
+      const { data, error } = await supabase.from("payments").insert(nuevo).select().single();
+      if (error) throw new Error(traducirErrorDB(error.message));
+
+      if (nuevo.patient_id) {
+        const { data: pac } = await supabase
+          .from("patients")
+          .select("balance, name")
+          .eq("id", nuevo.patient_id)
+          .maybeSingle();
+
+        if (pac) {
+          const saldoNuevo = Math.max(0, Number(pac.balance) - Number(nuevo.amount));
+          await supabase
+            .from("patients")
+            .update({ balance: saldoNuevo })
+            .eq("id", nuevo.patient_id);
+
+          await registrarActividad(
+            "pago",
+            "Pago registrado",
+            `${pac.name} · RD$ ${Number(nuevo.amount).toLocaleString("en-US")}`,
+          );
+        }
+      }
+      return data as Payment;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_COBROS });
+      void qc.invalidateQueries({ queryKey: CLAVE_PACIENTES });
+      void qc.invalidateQueries({ queryKey: ["actividad"] });
+    },
+  });
+}
+
 /* ============ ACTIVIDAD ============ */
+
+/**
+ * Deja constancia de algo que paso en la clinica.
+ * Si falla no rompe nada: es un registro, no el dato principal.
+ */
+export async function registrarActividad(kind: string, title: string, detail: string) {
+  const { data: sesion } = await supabase.auth.getSession();
+  await supabase
+    .from("activity_log")
+    .insert({ kind, title, detail, actor_id: sesion.session?.user?.id ?? null });
+}
 
 export function useActividad(limite = 6) {
   return useQuery({
