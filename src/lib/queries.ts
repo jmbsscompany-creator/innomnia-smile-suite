@@ -105,6 +105,62 @@ export function useCitasDelDia(fecha: string) {
   });
 }
 
+/** Citas entre dos fechas (inclusive). Se usa para la vista de semana. */
+export function useCitasDeRango(desde: string, hasta: string) {
+  return useQuery({
+    queryKey: [...CLAVE_CITAS, "rango", desde, hasta],
+    queryFn: async (): Promise<Appointment[]> => {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("*")
+        .gte("date", desde)
+        .lte("date", hasta)
+        .order("date", { ascending: true })
+        .order("time", { ascending: true });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Appointment[];
+    },
+  });
+}
+
+export interface NuevaCita {
+  patient_id: string | null;
+  date: string;
+  time: string;
+  duration: number;
+  treatment: string;
+  dentist: string;
+  status: Appointment["status"];
+  notes: string;
+}
+
+export function useCrearCita() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nueva: NuevaCita): Promise<Appointment> => {
+      const { data, error } = await supabase.from("appointments").insert(nueva).select().single();
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return data as Appointment;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_CITAS });
+    },
+  });
+}
+
+export function useCambiarEstadoCita() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: Appointment["status"] }) => {
+      const { error } = await supabase.from("appointments").update({ status }).eq("id", id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_CITAS });
+    },
+  });
+}
+
 /* ============ COBROS ============ */
 
 export const CLAVE_COBROS = ["cobros"] as const;
