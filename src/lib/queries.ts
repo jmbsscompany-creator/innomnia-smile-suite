@@ -3,7 +3,15 @@
 // avisar mientras carga y volver a pedir los datos cuando algo cambia.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import type { ActivityItem, Appointment, Patient, Payment, Service } from "@/lib/database.types";
+import type {
+  ActivityItem,
+  Appointment,
+  ClinicSettings,
+  Patient,
+  Payment,
+  Profile,
+  Service,
+} from "@/lib/database.types";
 
 /** Traduce los errores de la base, que vienen en ingles. */
 export function traducirErrorDB(mensaje: string): string {
@@ -88,6 +96,53 @@ export function useActualizarPaciente() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: CLAVE_PACIENTES });
+    },
+  });
+}
+
+/* ============ DATOS DE LA CLINICA ============ */
+
+export const CLAVE_CLINICA = ["clinica"] as const;
+
+export function useClinica() {
+  return useQuery({
+    queryKey: CLAVE_CLINICA,
+    queryFn: async (): Promise<ClinicSettings | null> => {
+      const { data, error } = await supabase
+        .from("clinic_settings")
+        .select("*")
+        .eq("id", 1)
+        .maybeSingle();
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data as ClinicSettings | null) ?? null;
+    },
+  });
+}
+
+export function useActualizarClinica() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (cambios: Partial<ClinicSettings>) => {
+      const { error } = await supabase.from("clinic_settings").update(cambios).eq("id", 1);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_CLINICA });
+    },
+  });
+}
+
+/** Quien tiene acceso al sistema. */
+export function usePerfiles() {
+  return useQuery({
+    queryKey: ["perfiles"],
+    queryFn: async (): Promise<Profile[]> => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Profile[];
     },
   });
 }
