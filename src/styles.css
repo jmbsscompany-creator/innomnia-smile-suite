@@ -108,6 +108,21 @@
   --info: oklch(0.55 0.14 252);
   --info-soft: oklch(0.955 0.02 245);
 
+  /* Odontograma: un color por estado del diente.
+     Se eligen bien separados entre si para que se distingan de un vistazo
+     incluso en una pantalla pequena o con poca luz en el consultorio. */
+  --odo-sano: oklch(1 0 0);
+  --odo-caries: oklch(0.6 0.19 22);          /* rojo: hay que tratar */
+  --odo-obturado: oklch(0.62 0.15 252);      /* azul: ya tratado */
+  --odo-sellante: oklch(0.72 0.11 195);      /* turquesa: preventivo */
+  --odo-corona: oklch(0.74 0.14 78);         /* dorado */
+  --odo-endodoncia: oklch(0.52 0.17 305);    /* violeta */
+  --odo-implante: oklch(0.58 0.09 235);      /* azul acero */
+  --odo-protesis: oklch(0.65 0.12 160);      /* verde */
+  --odo-fractura: oklch(0.65 0.16 45);       /* naranja */
+  --odo-extraccion: oklch(0.62 0.2 12);      /* rojo intenso */
+  --odo-ausente: oklch(0.85 0.01 250);       /* gris: no esta */
+
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.35 0.03 255);
   --sidebar-primary: oklch(0.64 0.15 252);

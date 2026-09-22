@@ -8,6 +8,7 @@ import type {
   Appointment,
   ClinicSettings,
   Dentist,
+  OdontogramEntry,
   Patient,
   Payment,
   Profile,
@@ -427,6 +428,125 @@ export function useCrearCobro() {
       void qc.invalidateQueries({ queryKey: CLAVE_COBROS });
       void qc.invalidateQueries({ queryKey: CLAVE_PACIENTES });
       void qc.invalidateQueries({ queryKey: ["actividad"] });
+    },
+  });
+}
+
+/* ============ ODONTOGRAMA ============ */
+
+export const CLAVE_ODONTOGRAMA = ["odontograma"] as const;
+
+/** Un paciente suelto, para su ficha. */
+export function usePaciente(id: string) {
+  return useQuery({
+    queryKey: [...CLAVE_PACIENTES, id],
+    queryFn: async (): Promise<Patient | null> => {
+      const { data, error } = await supabase
+        .from("patients")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data as Patient | null) ?? null;
+    },
+  });
+}
+
+/** Citas de un paciente, de la mas reciente a la mas vieja. */
+export function useCitasDePaciente(pacienteId: string) {
+  return useQuery({
+    queryKey: [...CLAVE_CITAS, "paciente", pacienteId],
+    queryFn: async (): Promise<Appointment[]> => {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("patient_id", pacienteId)
+        .order("date", { ascending: false })
+        .order("time", { ascending: false });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Appointment[];
+    },
+  });
+}
+
+/** Cobros de un paciente. */
+export function useCobrosDePaciente(pacienteId: string) {
+  return useQuery({
+    queryKey: [...CLAVE_COBROS, "paciente", pacienteId],
+    queryFn: async (): Promise<Payment[]> => {
+      const { data, error } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("patient_id", pacienteId)
+        .order("date", { ascending: false });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Payment[];
+    },
+  });
+}
+
+/**
+ * Estado actual del odontograma: solo el ultimo registro de cada cara.
+ * Lo calcula la base con la vista odontogram_current.
+ */
+export function useOdontograma(pacienteId: string) {
+  return useQuery({
+    queryKey: [...CLAVE_ODONTOGRAMA, pacienteId],
+    queryFn: async (): Promise<OdontogramEntry[]> => {
+      const { data, error } = await supabase
+        .from("odontogram_current")
+        .select("*")
+        .eq("patient_id", pacienteId);
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as OdontogramEntry[];
+    },
+  });
+}
+
+/** Toda la historia del odontograma, del cambio mas reciente al mas viejo. */
+export function useHistorialOdontograma(pacienteId: string, limite = 40) {
+  return useQuery({
+    queryKey: [...CLAVE_ODONTOGRAMA, "historial", pacienteId, limite],
+    queryFn: async (): Promise<OdontogramEntry[]> => {
+      const { data, error } = await supabase
+        .from("odontogram_entries")
+        .select("*")
+        .eq("patient_id", pacienteId)
+        .order("created_at", { ascending: false })
+        .limit(limite);
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as OdontogramEntry[];
+    },
+  });
+}
+
+export interface RegistroDiente {
+  patient_id: string;
+  tooth: string;
+  surface: OdontogramEntry["surface"];
+  condition: string;
+  notes?: string;
+}
+
+/**
+ * Registra el estado de un diente. Nunca modifica lo anterior: agrega
+ * una linea nueva. El estado de hoy es la ultima linea de cada cara,
+ * y la historia completa queda guardada.
+ */
+export function useRegistrarDiente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (r: RegistroDiente) => {
+      const { data: sesion } = await supabase.auth.getSession();
+      const { error } = await supabase.from("odontogram_entries").insert({
+        ...r,
+        notes: r.notes ?? "",
+        created_by: sesion.session?.user?.id ?? null,
+      });
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_ODONTOGRAMA });
     },
   });
 }

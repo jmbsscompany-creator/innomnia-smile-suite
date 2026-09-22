@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Phone, Search, TriangleAlert, UserPlus, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import type { Patient } from "@/lib/database.types";
@@ -279,7 +279,13 @@ function PatientsPage() {
                             <InitialsAvatar name={p.name} size="sm" className="size-10 text-sm" />
                             <div className="min-w-0">
                               <p className="flex items-center gap-2 truncate font-semibold">
-                                {p.name}
+                                <Link
+                                  to="/pacientes/$id"
+                                  params={{ id: p.id }}
+                                  className="truncate hover:text-primary hover:underline"
+                                >
+                                  {p.name}
+                                </Link>
                                 {falta.length > 0 && (
                                   <span
                                     title={`Falta: ${falta.join(" y ")}`}
@@ -338,32 +344,38 @@ function PatientsPage() {
             {/* Tarjetas: telefono */}
             <ul className="mt-4 divide-y divide-border md:hidden">
               {lista.map((p) => (
-                <li key={p.id} className="flex items-center gap-3 py-3.5">
-                  <InitialsAvatar name={p.name} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{p.name}</p>
-                    {faltantes(p).length > 0 ? (
-                      <p className="inline-flex items-center gap-1 text-sm font-medium text-warning">
-                        <TriangleAlert className="size-3.5" /> Falta {faltantes(p).join(" y ")}
-                      </p>
-                    ) : (
-                      <p className="truncate text-sm text-muted-foreground">
-                        {p.file_number ? `#${p.file_number} · ` : ""}
-                        {p.treatment || "Sin tratamiento"}
-                      </p>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <Pill tone={tonoEstado[p.status]}>{textoEstado[p.status]}</Pill>
-                    <p
-                      className={cn(
-                        "mt-1 text-sm font-semibold",
-                        p.balance > 0 ? "text-warning" : "text-muted-foreground",
+                <li key={p.id}>
+                  <Link
+                    to="/pacientes/$id"
+                    params={{ id: p.id }}
+                    className="flex items-center gap-3 py-3.5 transition-colors hover:bg-primary-soft/40"
+                  >
+                    <InitialsAvatar name={p.name} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold">{p.name}</p>
+                      {faltantes(p).length > 0 ? (
+                        <p className="inline-flex items-center gap-1 text-sm font-medium text-warning">
+                          <TriangleAlert className="size-3.5" /> Falta {faltantes(p).join(" y ")}
+                        </p>
+                      ) : (
+                        <p className="truncate text-sm text-muted-foreground">
+                          {p.file_number ? `#${p.file_number} · ` : ""}
+                          {p.treatment || "Sin tratamiento"}
+                        </p>
                       )}
-                    >
-                      {p.balance > 0 ? formatDOP(p.balance) : "Al dia"}
-                    </p>
-                  </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <Pill tone={tonoEstado[p.status]}>{textoEstado[p.status]}</Pill>
+                      <p
+                        className={cn(
+                          "mt-1 text-sm font-semibold",
+                          p.balance > 0 ? "text-warning" : "text-muted-foreground",
+                        )}
+                      >
+                        {p.balance > 0 ? formatDOP(p.balance) : "Al dia"}
+                      </p>
+                    </div>
+                  </Link>
                 </li>
               ))}
             </ul>

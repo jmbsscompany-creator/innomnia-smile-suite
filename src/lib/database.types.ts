@@ -99,6 +99,18 @@ export type Payment = {
   created_at: string;
 };
 
+export type OdontogramEntry = {
+  id: string;
+  patient_id: string;
+  tooth: string;
+  surface: "completo" | "mesial" | "distal" | "oclusal" | "vestibular" | "lingual";
+  condition: string;
+  notes: string;
+  appointment_id: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type ActivityItem = {
   id: string;
   kind: string;
@@ -159,6 +171,13 @@ export type Database = {
         Update: Partial<Payment>;
         Relationships: [];
       };
+      odontogram_entries: {
+        Row: OdontogramEntry;
+        Insert: Partial<Insertable<OdontogramEntry>> &
+          Pick<OdontogramEntry, "patient_id" | "tooth" | "condition">;
+        Update: Partial<OdontogramEntry>;
+        Relationships: [];
+      };
       activity_log: {
         Row: ActivityItem;
         Insert: Partial<Insertable<ActivityItem>> & Pick<ActivityItem, "kind" | "title">;
@@ -166,7 +185,12 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: Vacio;
+    Views: {
+      odontogram_current: {
+        Row: OdontogramEntry;
+        Relationships: [];
+      };
+    };
     Functions: Vacio;
     Enums: {
       appointment_status: AppointmentStatus;
