@@ -3,7 +3,7 @@
 // avisar mientras carga y volver a pedir los datos cuando algo cambia.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import type { Patient } from "@/lib/database.types";
+import type { ActivityItem, Appointment, Patient, Payment } from "@/lib/database.types";
 
 /** Traduce los errores de la base, que vienen en ingles. */
 export function traducirErrorDB(mensaje: string): string {
@@ -71,6 +71,72 @@ export function useActualizarPaciente() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: CLAVE_PACIENTES });
+    },
+  });
+}
+
+/* ============ FECHA DE HOY ============ */
+
+/** Hoy en formato YYYY-MM-DD, segun el reloj de quien usa la app. */
+export function hoyISO(): string {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+/* ============ CITAS ============ */
+
+export const CLAVE_CITAS = ["citas"] as const;
+
+/** Citas de un dia concreto, ordenadas por hora. */
+export function useCitasDelDia(fecha: string) {
+  return useQuery({
+    queryKey: [...CLAVE_CITAS, "dia", fecha],
+    queryFn: async (): Promise<Appointment[]> => {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("date", fecha)
+        .order("time", { ascending: true });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Appointment[];
+    },
+  });
+}
+
+/* ============ COBROS ============ */
+
+export const CLAVE_COBROS = ["cobros"] as const;
+
+export function useCobrosDelDia(fecha: string) {
+  return useQuery({
+    queryKey: [...CLAVE_COBROS, "dia", fecha],
+    queryFn: async (): Promise<Payment[]> => {
+      const { data, error } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("date", fecha)
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Payment[];
+    },
+  });
+}
+
+/* ============ ACTIVIDAD ============ */
+
+export function useActividad(limite = 6) {
+  return useQuery({
+    queryKey: ["actividad", limite],
+    queryFn: async (): Promise<ActivityItem[]> => {
+      const { data, error } = await supabase
+        .from("activity_log")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(limite);
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as ActivityItem[];
     },
   });
 }
