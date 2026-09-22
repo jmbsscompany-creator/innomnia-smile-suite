@@ -1,0 +1,76 @@
+// Lectura y escritura de datos contra Supabase.
+// Usa react-query, que ya venia en el proyecto: se encarga de guardar en cache,
+// avisar mientras carga y volver a pedir los datos cuando algo cambia.
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import type { Patient } from "@/lib/database.types";
+
+/** Traduce los errores de la base, que vienen en ingles. */
+export function traducirErrorDB(mensaje: string): string {
+  const m = mensaje.toLowerCase();
+  if (m.includes("row-level security"))
+    return "No tienes permiso para hacer eso. Habla con la odontologa.";
+  if (m.includes("duplicate key")) return "Ese registro ya existe.";
+  if (m.includes("violates foreign key")) return "Falta un dato relacionado.";
+  if (m.includes("jwt") || m.includes("expired")) return "Tu sesion vencio. Vuelve a entrar.";
+  if (m.includes("failed to fetch") || m.includes("network"))
+    return "No se pudo conectar con el servidor. Revisa tu internet.";
+  return mensaje;
+}
+
+/* ============ PACIENTES ============ */
+
+export const CLAVE_PACIENTES = ["pacientes"] as const;
+
+export function usePacientes() {
+  return useQuery({
+    queryKey: CLAVE_PACIENTES,
+    queryFn: async (): Promise<Patient[]> => {
+      const { data, error } = await supabase
+        .from("patients")
+        .select("*")
+        .order("name", { ascending: true });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Patient[];
+    },
+  });
+}
+
+/** Lo que el formulario envia al crear un paciente. */
+export interface NuevoPaciente {
+  name: string;
+  phone: string;
+  email: string;
+  birth_date: string | null;
+  treatment: string;
+  status: Patient["status"];
+  notes: string;
+}
+
+export function useCrearPaciente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nuevo: NuevoPaciente): Promise<Patient> => {
+      const { data, error } = await supabase.from("patients").insert(nuevo).select().single();
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return data as Patient;
+    },
+    // Al terminar, vuelve a pedir la lista para que aparezca el nuevo.
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_PACIENTES });
+    },
+  });
+}
+
+export function useActualizarPaciente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, cambios }: { id: string; cambios: Partial<Patient> }) => {
+      const { error } = await supabase.from("patients").update(cambios).eq("id", id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_PACIENTES });
+    },
+  });
+}

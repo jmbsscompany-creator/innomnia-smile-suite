@@ -81,17 +81,28 @@ export function ModalActions({
   onCancel,
   submitLabel = "Guardar",
   cancelLabel = "Cancelar",
+  formId,
+  disabled,
 }: {
   onCancel: () => void;
-  submitLabel?: string;
-  cancelLabel?: string;
+  submitLabel?: string | undefined;
+  cancelLabel?: string | undefined;
+  /**
+   * Id del <form> que este boton debe enviar.
+   * Hace falta porque el pie del modal queda FUERA del formulario,
+   * y sin esto el boton de guardar no dispara nada.
+   */
+  formId?: string | undefined;
+  disabled?: boolean | undefined;
 }) {
   return (
     <>
-      <Button type="button" variant="outline" onClick={onCancel}>
+      <Button type="button" variant="outline" onClick={onCancel} disabled={disabled}>
         {cancelLabel}
       </Button>
-      <Button type="submit">{submitLabel}</Button>
+      <Button type="submit" form={formId} disabled={disabled}>
+        {submitLabel}
+      </Button>
     </>
   );
 }
