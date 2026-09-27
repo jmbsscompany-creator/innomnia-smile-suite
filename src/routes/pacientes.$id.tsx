@@ -64,8 +64,18 @@ export const Route = createFileRoute("/pacientes/$id")({
 
 type Pestana = "ficha" | "odontograma" | "periodontograma" | "historial";
 
-const tonoEstado = { activo: "success", seguimiento: "warning", nuevo: "info" } as const;
-const textoEstado = { activo: "Activo", seguimiento: "Seguimiento", nuevo: "Nuevo" } as const;
+const tonoEstado = {
+  activo: "success",
+  seguimiento: "warning",
+  nuevo: "info",
+  inactivo: "muted",
+} as const;
+const textoEstado = {
+  activo: "Activo",
+  seguimiento: "Seguimiento",
+  nuevo: "Nuevo",
+  inactivo: "Inactivo",
+} as const;
 
 function FichaPaciente() {
   const { id } = Route.useParams();

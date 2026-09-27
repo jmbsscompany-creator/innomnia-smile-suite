@@ -6,7 +6,7 @@
 export type AppointmentStatus =
   "confirmada" | "pendiente" | "en-consulta" | "completada" | "cancelada";
 
-export type PatientStatus = "activo" | "seguimiento" | "nuevo";
+export type PatientStatus = "activo" | "seguimiento" | "nuevo" | "inactivo";
 
 export type UserRole = "dentista" | "secretaria";
 

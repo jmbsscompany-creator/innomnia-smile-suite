@@ -62,10 +62,26 @@ const filtros: { key: Filtro; label: string }[] = [
   { key: "activo", label: "Activos" },
   { key: "seguimiento", label: "Seguimiento" },
   { key: "nuevo", label: "Nuevos" },
+  { key: "inactivo", label: "Inactivos" },
 ];
 
-const tonoEstado = { activo: "success", seguimiento: "warning", nuevo: "info" } as const;
-const textoEstado = { activo: "Activo", seguimiento: "Seguimiento", nuevo: "Nuevo" } as const;
+const tonoEstado = {
+  activo: "success",
+  seguimiento: "warning",
+  nuevo: "info",
+  inactivo: "muted",
+} as const;
+const textoEstado = {
+  activo: "Activo",
+  seguimiento: "Seguimiento",
+  nuevo: "Nuevo",
+  inactivo: "Inactivo",
+} as const;
+
+/** Telefono sin nada mas que numeros, para comparar aunque el formato cambie. */
+function soloNumeros(t: string): string {
+  return t.replace(/\D/g, "");
+}
 
 const FORM_VACIO: NuevoPaciente = {
   file_number: "",
@@ -137,6 +153,23 @@ function PatientsPage() {
 
   const sinNinguno = !isPending && !isError && (pacientes?.length ?? 0) === 0;
   const enSeguimiento = (pacientes ?? []).filter((p) => p.status === "seguimiento").length;
+
+  /**
+   * Aviso de posible duplicado: compara lo que se esta escribiendo en el
+   * formulario contra los pacientes que ya existen, por nombre (sin tildes
+   * ni mayusculas) o por telefono (solo los numeros). Es solo un aviso,
+   * no bloquea guardar: puede ser una coincidencia real de dos personas.
+   */
+  const posiblesDuplicados = useMemo(() => {
+    const nombreBuscado = normalizar(form.name).trim();
+    const telBuscado = soloNumeros(form.phone);
+    if (nombreBuscado.length < 3 && telBuscado.length < 7) return [];
+    return (pacientes ?? []).filter((p) => {
+      const mismoNombre = nombreBuscado.length >= 3 && normalizar(p.name).trim() === nombreBuscado;
+      const mismoTelefono = telBuscado.length >= 7 && soloNumeros(p.phone) === telBuscado;
+      return mismoNombre || mismoTelefono;
+    });
+  }, [pacientes, form.name, form.phone]);
 
   function cambiar<K extends keyof NuevoPaciente>(campo: K, valor: NuevoPaciente[K]) {
     setForm((prev) => ({ ...prev, [campo]: valor }));
@@ -473,6 +506,7 @@ function PatientsPage() {
                 <option value="nuevo">Nuevo</option>
                 <option value="activo">Activo</option>
                 <option value="seguimiento">Seguimiento</option>
+                <option value="inactivo">Inactivo</option>
               </SelectInput>
             </Field>
           </FormGrid>
@@ -492,6 +526,21 @@ function PatientsPage() {
               placeholder="Alergias, observaciones, preferencias de horario..."
             />
           </Field>
+
+          {posiblesDuplicados.length > 0 && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-xl bg-warning-soft px-3.5 py-3 text-sm text-warning"
+            >
+              <TriangleAlert className="mt-px size-4 shrink-0" />
+              <span>
+                Ya existe{" "}
+                {posiblesDuplicados.length === 1 ? "un paciente parecido" : "pacientes parecidos"}:{" "}
+                {posiblesDuplicados.map((p) => p.name).join(", ")}. Revisa que no sea la misma
+                persona antes de guardar.
+              </span>
+            </p>
+          )}
 
           {crear.isError && (
             <p
