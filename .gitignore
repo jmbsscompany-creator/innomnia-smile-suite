@@ -37,3 +37,7 @@ dist-ssr
 # .env.local SI se ignora: es donde cada quien pone overrides propios/privados.
 .env.local
 .env.*.local
+
+# Datos reales de pacientes usados para la importacion (nombres reales de
+# la clinica). El script si se sube, este archivo con los datos no.
+scripts/pacientes.csv
