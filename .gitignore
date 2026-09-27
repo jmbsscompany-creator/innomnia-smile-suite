@@ -31,7 +31,9 @@ dist-ssr
 *.sln
 *.sw?
 
-# Variables de entorno (claves de Supabase, etc.)
-.env
-.env.*
-!.env.example
+# Variables de entorno.
+# .env SI se sube: trae solo la clave publica (publishable) de Supabase,
+# protegida por los candados (RLS) de la base de datos, no por estar oculta.
+# .env.local SI se ignora: es donde cada quien pone overrides propios/privados.
+.env.local
+.env.*.local
