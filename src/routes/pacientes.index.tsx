@@ -1,11 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Phone, Search, TriangleAlert, UserPlus, Users } from "lucide-react";
+import { Search, TriangleAlert, UserPlus, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import type { Patient } from "@/lib/database.types";
-import { usePacientes, useCrearPaciente, type NuevoPaciente } from "@/lib/queries";
+import { usePacientes, useCrearPaciente, useClinica, type NuevoPaciente } from "@/lib/queries";
 import { edadDesde, formatDOP, normalizar } from "@/lib/format";
 import { formatShortDate } from "@/lib/dates";
-import { Button, EmptyState, InitialsAvatar, PageHeader, Pill } from "@/components/app/ui";
+import {
+  BotonWhatsApp,
+  Button,
+  EmptyState,
+  InitialsAvatar,
+  PageHeader,
+  Pill,
+  TelefonoWhatsApp,
+} from "@/components/app/ui";
+import { saludo } from "@/lib/whatsapp";
 import {
   Field,
   FormGrid,
@@ -18,7 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const title = "Pacientes — INNOMNIA Dental";
-const description = "Expedientes de pacientes, proximas visitas, saldos y seguimiento.";
+const description = "Expedientes de pacientes, próximas visitas, saldos y seguimiento.";
 
 export const Route = createFileRoute("/pacientes/")({
   head: () => ({
@@ -43,7 +52,7 @@ type Filtro = "todos" | "incompleta" | Patient["status"];
  */
 export function faltantes(p: Patient): string[] {
   const falta: string[] = [];
-  if (!p.phone.trim()) falta.push("telefono");
+  if (!p.phone.trim()) falta.push("teléfono");
   if (!p.birth_date) falta.push("fecha de nacimiento");
   return falta;
 }
@@ -88,6 +97,8 @@ function Esqueleto() {
 
 function PatientsPage() {
   const { data: pacientes, isPending, isError, error, refetch } = usePacientes();
+  const clinica = useClinica();
+  const nombreClinica = clinica.data?.name?.trim() ?? "";
   const crear = useCrearPaciente();
 
   const [q, setQ] = useState("");
@@ -148,7 +159,7 @@ function PatientsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Pacientes"
         subtitle={
@@ -175,7 +186,7 @@ function PatientsPage() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por nombre, apellido, ficha, telefono o tratamiento"
+                placeholder="Buscar por nombre, apellido, ficha, teléfono o tratamiento"
                 className="ml-2.5 w-full bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
               />
             </label>
@@ -230,9 +241,9 @@ function PatientsPage() {
             <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary-soft text-primary">
               <Users className="size-7" strokeWidth={1.6} />
             </span>
-            <p className="mt-4 text-[17px] font-semibold">Todavia no hay pacientes</p>
+            <p className="mt-4 text-[17px] font-semibold">Todavía no hay pacientes</p>
             <p className="mx-auto mt-1.5 max-w-[42ch] text-sm text-muted-foreground">
-              Cuando registres el primero va a aparecer aqui, con su historial, sus proximas citas y
+              Cuando registres el primero va a aparecer aquí, con su historial, sus próximas citas y
               su saldo.
             </p>
             <Button size="lg" className="mt-5" onClick={() => setAbierto(true)}>
@@ -244,11 +255,11 @@ function PatientsPage() {
           <div className="mt-4">
             <EmptyState
               title={
-                filtro === "incompleta" ? "Todas las fichas estan completas" : "Sin resultados"
+                filtro === "incompleta" ? "Todas las fichas están completas" : "Sin resultados"
               }
               hint={
                 filtro === "incompleta"
-                  ? "No queda ningun paciente con datos por llenar."
+                  ? "No queda ningún paciente con datos por llenar."
                   : "Prueba con otro nombre o cambia el filtro."
               }
             />
@@ -262,8 +273,8 @@ function PatientsPage() {
                   <tr>
                     <th className="px-5 py-3 font-medium">Paciente</th>
                     <th className="px-4 py-3 font-medium">Contacto</th>
-                    <th className="px-4 py-3 font-medium">Ultima visita</th>
-                    <th className="px-4 py-3 font-medium">Proxima cita</th>
+                    <th className="px-4 py-3 font-medium">Última visita</th>
+                    <th className="px-4 py-3 font-medium">Próxima cita</th>
                     <th className="px-4 py-3 font-medium">Estado</th>
                     <th className="px-5 py-3 text-right font-medium">Saldo</th>
                   </tr>
@@ -298,7 +309,7 @@ function PatientsPage() {
                               <p className="truncate text-sm text-muted-foreground">
                                 {[
                                   p.file_number ? `#${p.file_number}` : null,
-                                  edad !== null ? `${edad} anos` : null,
+                                  edad !== null ? `${edad} años` : null,
                                   p.treatment || null,
                                 ]
                                   .filter(Boolean)
@@ -310,9 +321,11 @@ function PatientsPage() {
                         </td>
                         <td className="px-4 py-3.5 text-muted-foreground">
                           {p.phone ? (
-                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                              <Phone className="size-3.5" /> {p.phone}
-                            </span>
+                            <TelefonoWhatsApp
+                              telefono={p.phone}
+                              mensaje={saludo(p.name, nombreClinica)}
+                              className="whitespace-nowrap"
+                            />
                           ) : (
                             "—"
                           )}
@@ -332,7 +345,7 @@ function PatientsPage() {
                             p.balance > 0 ? "text-warning" : "text-muted-foreground",
                           )}
                         >
-                          {p.balance > 0 ? formatDOP(p.balance) : "Al dia"}
+                          {p.balance > 0 ? formatDOP(p.balance) : "Al día"}
                         </td>
                       </tr>
                     );
@@ -344,11 +357,11 @@ function PatientsPage() {
             {/* Tarjetas: telefono */}
             <ul className="mt-4 divide-y divide-border md:hidden">
               {lista.map((p) => (
-                <li key={p.id}>
+                <li key={p.id} className="flex items-center gap-2">
                   <Link
                     to="/pacientes/$id"
                     params={{ id: p.id }}
-                    className="flex items-center gap-3 py-3.5 transition-colors hover:bg-primary-soft/40"
+                    className="flex min-w-0 flex-1 items-center gap-3 py-3.5 transition-colors hover:bg-primary-soft/40"
                   >
                     <InitialsAvatar name={p.name} />
                     <div className="min-w-0 flex-1">
@@ -372,10 +385,16 @@ function PatientsPage() {
                           p.balance > 0 ? "text-warning" : "text-muted-foreground",
                         )}
                       >
-                        {p.balance > 0 ? formatDOP(p.balance) : "Al dia"}
+                        {p.balance > 0 ? formatDOP(p.balance) : "Al día"}
                       </p>
                     </div>
                   </Link>
+                  <BotonWhatsApp
+                    telefono={p.phone}
+                    mensaje={saludo(p.name, nombreClinica)}
+                    etiqueta=""
+                    size="sm"
+                  />
                 </li>
               ))}
             </ul>
@@ -388,7 +407,7 @@ function PatientsPage() {
         open={abierto}
         onClose={cerrarModal}
         title="Nuevo paciente"
-        description="Solo el nombre es obligatorio. Lo demas lo puedes completar despues."
+        description="Solo el nombre es obligatorio. Lo demás lo puedes completar después."
         size="lg"
         footer={
           <ModalActions
@@ -410,7 +429,7 @@ function PatientsPage() {
                 required
               />
             </Field>
-            <Field label="Numero de ficha" hint="Opcional.">
+            <Field label="Número de ficha" hint="Opcional.">
               <TextInput
                 value={form.file_number}
                 onChange={(e) => cambiar("file_number", e.target.value)}
@@ -420,7 +439,7 @@ function PatientsPage() {
           </FormGrid>
 
           <FormGrid>
-            <Field label="Telefono">
+            <Field label="Teléfono">
               <TextInput
                 type="tel"
                 value={form.phone}

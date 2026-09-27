@@ -12,4 +12,18 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    server: {
+      watch: {
+        // El plugin de rutas reescribe routeTree.gen.ts cada pocos segundos
+        // aunque el contenido no cambie. Vite veia cada reescritura como un
+        // cambio y recargaba la pagina en bucle: era imposible ni escribir
+        // en un formulario. Dejando de vigilar ese archivo, se acaba el bucle.
+        //
+        // A cambio: si agregamos o quitamos una pantalla, hay que reiniciar
+        // el servidor para que la tome. Vale la pena.
+        ignored: ["**/src/routeTree.gen.ts"],
+      },
+    },
+  },
 });

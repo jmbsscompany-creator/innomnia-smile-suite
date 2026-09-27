@@ -6,7 +6,7 @@ import { Button } from "@/components/app/ui";
 import { Field, TextInput } from "@/components/app/form";
 
 const title = "Entrar — INNOMNIA Dental";
-const description = "Acceso al sistema de gestion de la clinica.";
+const description = "Acceso al sistema de gestion de la clínica.";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -39,9 +39,7 @@ function LoginPage() {
     setEnviando(true);
 
     const fallo =
-      modo === "entrar"
-        ? await signIn(correo, clave)
-        : await signUp(correo, clave, nombre);
+      modo === "entrar" ? await signIn(correo, clave) : await signUp(correo, clave, nombre);
 
     setEnviando(false);
 
@@ -51,9 +49,7 @@ function LoginPage() {
     }
 
     if (modo === "crear") {
-      setAviso(
-        "Cuenta creada. Si te pide confirmar el correo, revisa tu bandeja antes de entrar.",
-      );
+      setAviso("Cuenta creada. Si te pide confirmar el correo, revisa tu bandeja antes de entrar.");
       setModo("entrar");
       setClave("");
     }
@@ -85,8 +81,8 @@ function LoginPage() {
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
             {modo === "entrar"
-              ? "Accede al sistema de tu clinica."
-              : "La primera cuenta que se crea queda como odontologa."}
+              ? "Accede al sistema de tu clínica."
+              : "La primera cuenta que se crea queda como odontóloga."}
           </p>
 
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
@@ -121,10 +117,7 @@ function LoginPage() {
               </div>
             </Field>
 
-            <Field
-              label="Contrasena"
-              hint={modo === "crear" ? "Minimo 6 caracteres." : undefined}
-            >
+            <Field label="Contraseña" hint={modo === "crear" ? "Mínimo 6 caracteres." : undefined}>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
                 <TextInput
@@ -151,17 +144,11 @@ function LoginPage() {
             )}
 
             {aviso && (
-              <p className="rounded-xl bg-success-soft px-3.5 py-3 text-sm text-success">
-                {aviso}
-              </p>
+              <p className="rounded-xl bg-success-soft px-3.5 py-3 text-sm text-success">{aviso}</p>
             )}
 
             <Button type="submit" size="lg" className="w-full" disabled={enviando}>
-              {enviando
-                ? "Un momento..."
-                : modo === "entrar"
-                  ? "Entrar"
-                  : "Crear cuenta"}
+              {enviando ? "Un momento..." : modo === "entrar" ? "Entrar" : "Crear cuenta"}
             </Button>
           </form>
 
@@ -193,7 +180,7 @@ function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Los datos de pacientes son confidenciales. No compartas tu contrasena.
+          Los datos de pacientes son confidenciales. No compartas tu contraseña.
         </p>
       </div>
     </div>

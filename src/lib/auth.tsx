@@ -30,15 +30,15 @@ const AuthContext = createContext<AuthValue | null>(null);
 /** Traduce los errores de Supabase, que vienen en ingles y suenan a maquina. */
 function traducirError(mensaje: string): string {
   const m = mensaje.toLowerCase();
-  if (m.includes("invalid login credentials")) return "Correo o contrasena incorrectos.";
+  if (m.includes("invalid login credentials")) return "Correo o contraseña incorrectos.";
   if (m.includes("email not confirmed"))
     return "Primero tienes que confirmar tu correo. Revisa tu bandeja de entrada.";
   if (m.includes("user already registered"))
     return "Ese correo ya tiene cuenta. Entra en vez de crear una nueva.";
   if (m.includes("password should be at least"))
-    return "La contrasena debe tener al menos 6 caracteres.";
+    return "La contraseña debe tener al menos 6 caracteres.";
   if (m.includes("signups not allowed") || m.includes("signup is disabled"))
-    return "El registro esta cerrado. Pidele a la dentista que te cree la cuenta.";
+    return "El registro está cerrado. Pídele a la dentista que te cree la cuenta.";
   if (m.includes("failed to fetch") || m.includes("network"))
     return "No se pudo conectar con el servidor. Revisa tu internet.";
   if (m.includes("rate limit") || m.includes("too many"))

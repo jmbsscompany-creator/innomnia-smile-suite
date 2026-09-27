@@ -6,11 +6,16 @@ import { supabase } from "@/lib/supabase";
 import type {
   ActivityItem,
   Appointment,
+  Cargo,
   ClinicSettings,
   Dentist,
+  NotaClinica,
   OdontogramEntry,
   Patient,
   Payment,
+  Periodontograma,
+  PeriodontogramaDiente,
+  Producto,
   Profile,
   Service,
 } from "@/lib/database.types";
@@ -19,10 +24,10 @@ import type {
 export function traducirErrorDB(mensaje: string): string {
   const m = mensaje.toLowerCase();
   if (m.includes("row-level security"))
-    return "No tienes permiso para hacer eso. Habla con la odontologa.";
+    return "No tienes permiso para hacer eso. Habla con la odontóloga.";
   if (m.includes("duplicate key")) return "Ese registro ya existe.";
   if (m.includes("violates foreign key")) return "Falta un dato relacionado.";
-  if (m.includes("jwt") || m.includes("expired")) return "Tu sesion vencio. Vuelve a entrar.";
+  if (m.includes("jwt") || m.includes("expired")) return "Tu sesión vencio. Vuelve a entrar.";
   if (m.includes("failed to fetch") || m.includes("network"))
     return "No se pudo conectar con el servidor. Revisa tu internet.";
   return mensaje;
@@ -105,7 +110,7 @@ export function useActualizarPaciente() {
 
 /* ============ DATOS DE LA CLINICA ============ */
 
-export const CLAVE_CLINICA = ["clinica"] as const;
+export const CLAVE_CLINICA = ["clínica"] as const;
 
 export function useClinica() {
   return useQuery({
@@ -218,7 +223,7 @@ export const CLAVE_CITAS = ["citas"] as const;
 /** Citas de un dia concreto, ordenadas por hora. */
 export function useCitasDelDia(fecha: string) {
   return useQuery({
-    queryKey: [...CLAVE_CITAS, "dia", fecha],
+    queryKey: [...CLAVE_CITAS, "día", fecha],
     queryFn: async (): Promise<Appointment[]> => {
       const { data, error } = await supabase
         .from("appointments")
@@ -368,7 +373,7 @@ export const CLAVE_COBROS = ["cobros"] as const;
 
 export function useCobrosDelDia(fecha: string) {
   return useQuery({
-    queryKey: [...CLAVE_COBROS, "dia", fecha],
+    queryKey: [...CLAVE_COBROS, "día", fecha],
     queryFn: async (): Promise<Payment[]> => {
       const { data, error } = await supabase
         .from("payments")
@@ -388,6 +393,8 @@ export interface NuevoCobro {
   amount: number;
   date: string;
   notes: string;
+  /** A que cargo abona este pago, si es un abono a uno en concreto. */
+  cargo_id?: string | undefined;
 }
 
 /**
@@ -398,7 +405,11 @@ export function useCrearCobro() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (nuevo: NuevoCobro): Promise<Payment> => {
-      const { data, error } = await supabase.from("payments").insert(nuevo).select().single();
+      const { data, error } = await supabase
+        .from("payments")
+        .insert({ ...nuevo, cargo_id: nuevo.cargo_id ?? null })
+        .select()
+        .single();
       if (error) throw new Error(traducirErrorDB(error.message));
 
       if (nuevo.patient_id) {
@@ -504,7 +515,7 @@ export function useOdontograma(pacienteId: string) {
 }
 
 /** Toda la historia del odontograma, del cambio mas reciente al mas viejo. */
-export function useHistorialOdontograma(pacienteId: string, limite = 40) {
+export function useHistorialOdontograma(pacienteId: string, limite = 600) {
   return useQuery({
     queryKey: [...CLAVE_ODONTOGRAMA, "historial", pacienteId, limite],
     queryFn: async (): Promise<OdontogramEntry[]> => {
@@ -526,6 +537,8 @@ export interface RegistroDiente {
   surface: OdontogramEntry["surface"];
   condition: string;
   notes?: string;
+  /** true = tratamiento planificado (aun no hecho). Por defecto false. */
+  planned?: boolean;
 }
 
 /**
@@ -541,6 +554,7 @@ export function useRegistrarDiente() {
       const { error } = await supabase.from("odontogram_entries").insert({
         ...r,
         notes: r.notes ?? "",
+        planned: r.planned ?? false,
         created_by: sesion.session?.user?.id ?? null,
       });
       if (error) throw new Error(traducirErrorDB(error.message));
@@ -575,6 +589,357 @@ export function useActividad(limite = 6) {
         .limit(limite);
       if (error) throw new Error(traducirErrorDB(error.message));
       return (data ?? []) as ActivityItem[];
+    },
+  });
+}
+
+/* ==========================================================
+   PERIODONTOGRAMA
+
+   El odontograma mira los dientes; esto mira la encia y el hueso
+   que los sostienen. Cada examen es una foto de un dia: no se
+   edita el anterior, se hace uno nuevo y se comparan. Por eso
+   aqui hay "el ultimo examen" y "la lista de examenes", y no un
+   unico estado actual como en el odontograma.
+   ========================================================== */
+
+export const CLAVE_PERIO = ["periodontograma"] as const;
+
+/** Los seis puntos que se sondean en cada diente, en su orden fijo. */
+export const PUNTOS = 6;
+
+/** Un examen con sus dientes ya juntos, que es como lo usa la pantalla. */
+export interface ExamenPerio {
+  examen: Periodontograma;
+  dientes: PeriodontogramaDiente[];
+}
+
+/** Lista de examenes de un paciente, del mas reciente al mas viejo. */
+export function usePeriodontogramas(pacienteId: string) {
+  return useQuery({
+    queryKey: [...CLAVE_PERIO, "lista", pacienteId],
+    queryFn: async (): Promise<Periodontograma[]> => {
+      const { data, error } = await supabase
+        .from("periodontogramas")
+        .select("*")
+        .eq("patient_id", pacienteId)
+        .order("fecha", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Periodontograma[];
+    },
+  });
+}
+
+/**
+ * Un examen concreto con todos sus dientes.
+ * Se pasa null cuando todavia no hay ninguno elegido.
+ */
+export function usePeriodontograma(examenId: string | null) {
+  return useQuery({
+    queryKey: [...CLAVE_PERIO, "examen", examenId],
+    enabled: examenId !== null,
+    queryFn: async (): Promise<ExamenPerio | null> => {
+      if (!examenId) return null;
+
+      const { data: cab, error: e1 } = await supabase
+        .from("periodontogramas")
+        .select("*")
+        .eq("id", examenId)
+        .maybeSingle();
+      if (e1) throw new Error(traducirErrorDB(e1.message));
+      if (!cab) return null;
+
+      const { data: dientes, error: e2 } = await supabase
+        .from("periodontograma_dientes")
+        .select("*")
+        .eq("periodontograma_id", examenId);
+      if (e2) throw new Error(traducirErrorDB(e2.message));
+
+      return {
+        examen: cab as Periodontograma,
+        dientes: (dientes ?? []) as PeriodontogramaDiente[],
+      };
+    },
+  });
+}
+
+/**
+ * Abre un examen nuevo. Si se le pasa el anterior, copia de el las
+ * piezas ausentes y la furca: eso no cambia entre visitas y hacer que
+ * la doctora lo vuelva a marcar cada vez es perder su tiempo. Lo que
+ * SI se mide de nuevo (profundidad, margen, sangrado, placa) queda en
+ * blanco a proposito: copiarlo seria inventar datos clinicos.
+ */
+export function useCrearPeriodontograma() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      pacienteId: string;
+      copiarDe?: PeriodontogramaDiente[] | undefined;
+    }): Promise<Periodontograma> => {
+      const { data, error } = await supabase
+        .from("periodontogramas")
+        .insert({ patient_id: args.pacienteId })
+        .select()
+        .single();
+      if (error) throw new Error(traducirErrorDB(error.message));
+      const examen = data as Periodontograma;
+
+      const heredables = (args.copiarDe ?? []).filter((d) => d.ausente || d.furca > 0);
+      if (heredables.length > 0) {
+        const { error: e2 } = await supabase.from("periodontograma_dientes").insert(
+          heredables.map((d) => ({
+            periodontograma_id: examen.id,
+            tooth: d.tooth,
+            ausente: d.ausente,
+            furca: d.furca,
+          })),
+        );
+        if (e2) throw new Error(traducirErrorDB(e2.message));
+      }
+      return examen;
+    },
+    onSuccess: (examen) => {
+      void qc.invalidateQueries({ queryKey: [...CLAVE_PERIO, "lista", examen.patient_id] });
+    },
+  });
+}
+
+/**
+ * Guarda las mediciones de UN diente. Se usa upsert porque la fila
+ * puede no existir todavia: la doctora empieza a sondear por donde
+ * quiera, no hay que crear las 32 filas por adelantado.
+ */
+export function useGuardarDientePerio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (fila: PeriodontogramaDiente): Promise<void> => {
+      const { error } = await supabase
+        .from("periodontograma_dientes")
+        .upsert(fila, { onConflict: "periodontograma_id,tooth" });
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: (_r, fila) => {
+      void qc.invalidateQueries({
+        queryKey: [...CLAVE_PERIO, "examen", fila.periodontograma_id],
+      });
+    },
+  });
+}
+
+/** Cambia la fecha o las notas del examen. */
+export function useActualizarPeriodontograma() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      cambios: Partial<Pick<Periodontograma, "fecha" | "notas">>;
+    }): Promise<void> => {
+      const { error } = await supabase
+        .from("periodontogramas")
+        .update(args.cambios)
+        .eq("id", args.id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: (_r, args) => {
+      void qc.invalidateQueries({ queryKey: [...CLAVE_PERIO, "examen", args.id] });
+      void qc.invalidateQueries({ queryKey: [...CLAVE_PERIO, "lista"] });
+    },
+  });
+}
+
+/* ============ NOTAS CLINICAS (historial de procedimientos) ============ */
+//
+// Distinto del campo "notes" de patients, que es uno solo y se
+// sobrescribe cada vez que se guarda la ficha (sirve para alergias,
+// antecedentes — lo que no cambia). Esto es una bitacora: cada nota es
+// su propia fila con fecha, y se van acumulando sin borrar las
+// anteriores. Es al campo "notes" lo que el periodontograma es al
+// odontograma: una foto por dia, no un dato que se pisa.
+
+export const CLAVE_NOTAS = ["notas-clinicas"] as const;
+
+/** El historial de un paciente, la nota mas reciente primero. */
+export function useNotasClinicas(pacienteId: string) {
+  return useQuery({
+    queryKey: [...CLAVE_NOTAS, "paciente", pacienteId],
+    queryFn: async (): Promise<NotaClinica[]> => {
+      const { data, error } = await supabase
+        .from("notas_clinicas")
+        .select("*")
+        .eq("patient_id", pacienteId)
+        .order("fecha", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as NotaClinica[];
+    },
+  });
+}
+
+/** Agrega una nota nueva al historial. No toca ni borra las anteriores. */
+export function useAgregarNotaClinica() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { patientId: string; fecha: string; nota: string }): Promise<void> => {
+      const { error } = await supabase.from("notas_clinicas").insert({
+        patient_id: args.patientId,
+        fecha: args.fecha,
+        nota: args.nota,
+      });
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: (_r, args) => {
+      void qc.invalidateQueries({ queryKey: [...CLAVE_NOTAS, "paciente", args.patientId] });
+      void qc.invalidateQueries({ queryKey: ["actividad"] });
+    },
+  });
+}
+
+/* ============ CARGOS (lo que el paciente debe) ============ */
+//
+// "Registrar cobro" (arriba) es cuando el paciente PAGA: resta del saldo.
+// Un cargo es lo contrario — un tratamiento que se le hizo y que ahora
+// debe — y SUMA al saldo. Sin esto no habia ninguna forma de que un
+// paciente le quedara debiendo algo al sistema: el saldo solo podia
+// bajar, nunca subir. Cada cargo es su propia fila, con fecha, igual
+// que notas_clinicas: un historial de lo que se le ha ido cobrando.
+
+export const CLAVE_CARGOS = ["cargos"] as const;
+
+/** Cargos de un paciente, del mas reciente al mas viejo. */
+export function useCargosDePaciente(pacienteId: string) {
+  return useQuery({
+    queryKey: [...CLAVE_CARGOS, "paciente", pacienteId],
+    queryFn: async (): Promise<Cargo[]> => {
+      const { data, error } = await supabase
+        .from("cargos")
+        .select("*")
+        .eq("patient_id", pacienteId)
+        .order("fecha", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Cargo[];
+    },
+  });
+}
+
+export interface NuevoCargo {
+  patient_id: string;
+  concepto: string;
+  monto: number;
+  fecha: string;
+}
+
+/**
+ * Crea un cargo y le SUMA el monto al saldo del paciente. Es el reverso
+ * exacto de useCrearCobro: primero guarda el cargo, despues ajusta el
+ * saldo hacia arriba.
+ */
+export function useCrearCargo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nuevo: NuevoCargo): Promise<Cargo> => {
+      const { data, error } = await supabase.from("cargos").insert(nuevo).select().single();
+      if (error) throw new Error(traducirErrorDB(error.message));
+
+      const { data: pac } = await supabase
+        .from("patients")
+        .select("balance, name")
+        .eq("id", nuevo.patient_id)
+        .maybeSingle();
+
+      if (pac) {
+        const saldoNuevo = Number(pac.balance) + Number(nuevo.monto);
+        await supabase.from("patients").update({ balance: saldoNuevo }).eq("id", nuevo.patient_id);
+
+        await registrarActividad(
+          "cargo",
+          "Cargo agregado",
+          `${pac.name} · RD$ ${Number(nuevo.monto).toLocaleString("en-US")}`,
+        );
+      }
+      return data as Cargo;
+    },
+    onSuccess: (_r, args) => {
+      void qc.invalidateQueries({ queryKey: [...CLAVE_CARGOS, "paciente", args.patient_id] });
+      void qc.invalidateQueries({ queryKey: CLAVE_PACIENTES });
+      void qc.invalidateQueries({ queryKey: ["actividad"] });
+    },
+  });
+}
+
+/* ==========================================================
+   INVENTARIO
+
+   Productos de la clinica (guantes, anestesia, material...). Lo que
+   importa de verdad es el vencimiento: sirve para avisar antes de que
+   algo caduque, no solo para saber cuanto hay.
+   ========================================================== */
+
+export const CLAVE_PRODUCTOS = ["productos"] as const;
+
+/** Todo el inventario, lo que vence primero arriba (sin vencimiento, al final). */
+export function useProductos() {
+  return useQuery({
+    queryKey: CLAVE_PRODUCTOS,
+    queryFn: async (): Promise<Producto[]> => {
+      const { data, error } = await supabase
+        .from("productos")
+        .select("*")
+        .order("vencimiento", { ascending: true, nullsFirst: false })
+        .order("nombre", { ascending: true });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Producto[];
+    },
+  });
+}
+
+export interface NuevoProducto {
+  nombre: string;
+  categoria: string;
+  cantidad: number;
+  unidad: string;
+  vencimiento: string | null;
+  notas: string;
+}
+
+export function useCrearProducto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nuevo: NuevoProducto): Promise<Producto> => {
+      const { data, error } = await supabase.from("productos").insert(nuevo).select().single();
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return data as Producto;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_PRODUCTOS });
+    },
+  });
+}
+
+export function useActualizarProducto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, cambios }: { id: string; cambios: Partial<Producto> }) => {
+      const { error } = await supabase.from("productos").update(cambios).eq("id", id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_PRODUCTOS });
+    },
+  });
+}
+
+export function useEliminarProducto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("productos").delete().eq("id", id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_PRODUCTOS });
     },
   });
 }

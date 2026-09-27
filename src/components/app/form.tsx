@@ -372,7 +372,7 @@ export function Buscador({
           )}
           {ocultas > 0 && (
             <p className="border-t border-border bg-muted/40 px-3.5 py-2 text-center text-xs text-muted-foreground">
-              {ocultas} mas. Sigue escribiendo para afinar la busqueda.
+              {ocultas} más. Sigue escribiendo para afinar la búsqueda.
             </p>
           )}
         </div>

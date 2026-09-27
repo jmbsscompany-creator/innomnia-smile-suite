@@ -16,7 +16,7 @@ import { Field, FormGrid, TextInput } from "@/components/app/form";
 import { cn } from "@/lib/utils";
 
 const title = "Configuración — INNOMNIA Dental";
-const description = "Datos de la clinica, horarios de atencion y quien tiene acceso.";
+const description = "Datos de la clínica, horarios de atención y quién tiene acceso.";
 
 export const Route = createFileRoute("/configuracion")({
   head: () => ({
@@ -30,25 +30,25 @@ export const Route = createFileRoute("/configuracion")({
   component: SettingsPage,
 });
 
-const DIAS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
+const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 /** Sugerencias; se puede escribir cualquier otra. */
 const ESPECIALIDADES = [
-  "Odontologia general",
+  "Odontología general",
   "Ortodoncia",
   "Endodoncia",
   "Periodoncia",
-  "Cirugia oral",
-  "Odontopediatria",
-  "Implantologia",
-  "Protesis",
-  "Estetica dental",
+  "Cirugía oral",
+  "Odontopediatría",
+  "Implantología",
+  "Prótesis",
+  "Estética dental",
 ];
 
 const HORARIO_POR_DEFECTO = DIAS.map((day) => ({
   day,
   hours:
-    day === "Domingo" ? "Cerrado" : day === "Sabado" ? "9:00 am – 1:00 pm" : "8:00 am – 6:00 pm",
+    day === "Domingo" ? "Cerrado" : day === "Sábado" ? "9:00 am – 1:00 pm" : "8:00 am – 6:00 pm",
 }));
 
 interface FormClinica {
@@ -143,7 +143,7 @@ function SettingsPage() {
 
   if (isError) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <PageHeader title="Configuración" subtitle="No se pudo cargar" />
         <div className="rounded-xl bg-danger-soft px-4 py-6 text-center">
           <TriangleAlert className="mx-auto size-6 text-danger" />
@@ -157,18 +157,18 @@ function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Configuración"
         subtitle={
           isDentista
-            ? "Informacion general de tu clinica"
-            : "Informacion de la clinica. Solo la odontologa puede cambiarla."
+            ? "Información general de tu clínica"
+            : "Información de la clínica. Solo la odontóloga puede cambiarla."
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        <Section title="Datos de la clinica">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <Section title="Datos de la clínica">
           {isPending ? (
             <div className="grid gap-4 sm:grid-cols-2" aria-hidden>
               {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -177,15 +177,15 @@ function SettingsPage() {
             </div>
           ) : (
             <form onSubmit={enviar} className="grid gap-4 sm:grid-cols-2">
-              <Field label="Nombre de la clinica">
+              <Field label="Nombre de la clínica">
                 <TextInput
                   value={form.name}
                   onChange={(e) => cambiar("name", e.target.value)}
-                  placeholder="Clinica Dental Sonrisa"
+                  placeholder="Clínica Dental Sonrisa"
                   disabled={!isDentista}
                 />
               </Field>
-              <Field label="Odontologa principal">
+              <Field label="Odontóloga principal">
                 <TextInput
                   value={form.dentist}
                   onChange={(e) => cambiar("dentist", e.target.value)}
@@ -193,7 +193,7 @@ function SettingsPage() {
                   disabled={!isDentista}
                 />
               </Field>
-              <Field label="Telefono">
+              <Field label="Teléfono">
                 <TextInput
                   type="tel"
                   value={form.phone}
@@ -212,7 +212,7 @@ function SettingsPage() {
                 />
               </Field>
               <div className="sm:col-span-2">
-                <Field label="Direccion">
+                <Field label="Dirección">
                   <TextInput
                     value={form.address}
                     onChange={(e) => cambiar("address", e.target.value)}
@@ -251,8 +251,8 @@ function SettingsPage() {
           )}
         </Section>
 
-        <div className="space-y-6">
-          <Section title="Horario de atencion">
+        <div className="space-y-4">
+          <Section title="Horario de atención">
             {isPending ? (
               <div className="space-y-2" aria-hidden>
                 {[0, 1, 2].map((i) => (
@@ -282,17 +282,17 @@ function SettingsPage() {
             )}
             {isDentista && (
               <p className="mt-3 text-xs text-muted-foreground">
-                El horario se guarda con el boton de la izquierda, junto con los demas datos.
+                El horario se guarda con el botón de la izquierda, junto con los demás datos.
               </p>
             )}
           </Section>
 
-          <Section title="Doctores de la clinica">
+          <Section title="Doctores de la clínica">
             {doctores.isPending ? (
               <div className="h-14 animate-pulse rounded-lg bg-muted" aria-hidden />
             ) : (doctores.data?.length ?? 0) === 0 ? (
               <p className="py-4 text-center text-sm text-muted-foreground">
-                Todavia no hay doctores. Agrega el primero abajo.
+                Todavía no hay doctores. Agrega el primero abajo.
               </p>
             ) : (
               <ul className="divide-y divide-border">
@@ -367,7 +367,7 @@ function SettingsPage() {
             </p>
           </Section>
 
-          <Section title="Quien tiene acceso">
+          <Section title="Quién tiene acceso">
             {perfiles.isPending ? (
               <div className="h-14 animate-pulse rounded-lg bg-muted" aria-hidden />
             ) : (
@@ -381,7 +381,7 @@ function SettingsPage() {
                       </p>
                     </div>
                     <Pill tone={p.role === "dentista" ? "success" : "info"}>
-                      {p.role === "dentista" ? "Odontologa" : "Secretaria"}
+                      {p.role === "dentista" ? "Odontóloga" : "Secretaria"}
                     </Pill>
                   </li>
                 ))}
@@ -390,7 +390,7 @@ function SettingsPage() {
             <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-primary-soft/50 px-3.5 py-3">
               <ShieldCheck className="mt-px size-4 shrink-0 text-primary" />
               <p className="text-sm text-muted-foreground">
-                La odontologa ve y edita todo. La secretaria agenda citas, registra pacientes y
+                La odontóloga ve y edita todo. La secretaria agenda citas, registra pacientes y
                 cobra, pero no puede borrar expedientes ni cambiar precios.
               </p>
             </div>
@@ -401,15 +401,15 @@ function SettingsPage() {
               <li className="flex items-start gap-2.5">
                 <Lock className="mt-px size-4 shrink-0 text-primary" />
                 <span>
-                  Los expedientes solo se ven despues de entrar con usuario y contrasena. La propia
+                  Los expedientes solo se ven después de entrar con usuario y contraseña. La propia
                   base de datos los bloquea, no solo la pantalla.
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
                 <Users className="mt-px size-4 shrink-0 text-primary" />
                 <span>
-                  Para dar acceso a alguien mas, la odontologa crea su usuario. Nunca compartan una
-                  misma cuenta: si pasa algo, hay que saber quien hizo que.
+                  Para dar acceso a alguien más, la odontóloga crea su usuario. Nunca compartan una
+                  misma cuenta: si pasa algo, hay que saber quién hizo qué.
                 </span>
               </li>
             </ul>

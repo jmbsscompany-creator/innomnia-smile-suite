@@ -48,6 +48,11 @@
 
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+
+  --color-wa: var(--wa);
+  --color-wa-hover: var(--wa-hover);
+  --color-wa-soft: var(--wa-soft);
+  --color-wa-soft-foreground: var(--wa-soft-foreground);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
@@ -70,7 +75,7 @@
 }
 
 :root {
-  --radius: 0.875rem;
+  --radius: 0.75rem;
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.27 0.03 255);
@@ -123,6 +128,36 @@
   --odo-extraccion: oklch(0.62 0.2 12);      /* rojo intenso */
   --odo-ausente: oklch(0.85 0.01 250);       /* gris: no esta */
 
+  /* Lineas del dibujo. La del contorno del diente tiene que verse bien
+     aunque la pieza este sana; la de dentro separa las caras sin gritar. */
+  --odo-linea: oklch(0.58 0.03 250);
+  --odo-linea-suave: oklch(0.76 0.02 248);
+  /* Un diente no es de un solo color: la corona es esmalte, casi blanco,
+     y la raiz es dentina, mas amarilla. Entre las dos esta el cuello, que
+     es la linea donde acaba el esmalte. Con estos tres tonos el dibujo
+     deja de parecer una silueta recortada. */
+  --odo-esmalte: oklch(0.99 0.008 95);
+  --odo-cuello: oklch(0.89 0.055 83);
+  --odo-dentina: oklch(0.9 0.065 78);
+  --odo-dentina-honda: oklch(0.82 0.075 72);
+
+  /* El diente del odontograma: blanco marfil, no gris, con un borde
+     finito que lo separa de la encia. La encia va rosa suave: tiene que
+     leerse como encia sin gritar, porque encima van las marcas clinicas. */
+  --odo-diente: oklch(0.985 0.006 95);
+  --odo-diente-borde: oklch(0.8 0.018 250);
+  --odo-encia: oklch(0.88 0.055 20);
+  --odo-encia-borde: oklch(0.82 0.075 20);
+  --odo-hueso: oklch(0.94 0.045 85);
+
+  /* Verde de mensajeria, para los botones que abren WhatsApp. Se sale del
+     azul de la marca a proposito: quien lo ve tiene que entender de un
+     vistazo que ese boton se lleva la conversacion fuera del sistema. */
+  --wa: oklch(0.62 0.15 152);
+  --wa-hover: oklch(0.56 0.15 152);
+  --wa-soft: oklch(0.955 0.04 155);
+  --wa-soft-foreground: oklch(0.43 0.12 152);
+
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.35 0.03 255);
   --sidebar-primary: oklch(0.64 0.15 252);
@@ -167,8 +202,8 @@
 @utility icon-tile {
   display: grid;
   place-items: center;
-  width: 3rem;
-  height: 3rem;
+  width: 2.25rem;
+  height: 2.25rem;
   border-radius: 9999px;
   background-color: var(--color-primary-soft);
   color: var(--color-primary);

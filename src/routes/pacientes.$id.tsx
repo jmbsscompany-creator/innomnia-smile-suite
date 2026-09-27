@@ -1,33 +1,53 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  Activity,
   ArrowLeft,
   CalendarDays,
   Check,
+  ClipboardList,
   FileText,
   Phone,
+  Plus,
   TriangleAlert,
   Wallet,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import type { Patient } from "@/lib/database.types";
+import type { Patient, Payment } from "@/lib/database.types";
 import {
   useActualizarPaciente,
+  useAgregarNotaClinica,
+  useCargosDePaciente,
   useCitasDePaciente,
+  useClinica,
   useCobrosDePaciente,
-  useOdontograma,
+  useCrearCargo,
+  useCrearCobro,
+  useCrearPeriodontograma,
+  useGuardarDientePerio,
+  useHistorialOdontograma,
+  useNotasClinicas,
+  usePeriodontograma,
+  usePeriodontogramas,
+  hoyISO,
   usePaciente,
   useRegistrarDiente,
 } from "@/lib/queries";
-import { type Cara, type Estado } from "@/lib/odontograma";
-import {
-  LeyendaOdontograma,
-  Odontograma,
-  clave,
-  type MapaEstados,
-} from "@/components/app/Odontograma";
+import { LeyendaOdontograma, Odontograma, type AccionDiente } from "@/components/app/Odontograma";
+import { Periodontograma } from "@/components/app/Periodontograma";
+import { GraficoPeriodontal } from "@/components/app/GraficoPeriodontal";
+import { IndicesPeriodontal } from "@/components/app/IndicesPeriodontal";
 import { edadDesde, formatDOP } from "@/lib/format";
+import { enlaceLlamada, mensajeRecordatorio, saludo } from "@/lib/whatsapp";
 import { formatShortDate } from "@/lib/dates";
-import { Button, InitialsAvatar, Pill, Section, StatusBadge } from "@/components/app/ui";
+import {
+  BotonWhatsApp,
+  Button,
+  InitialsAvatar,
+  Pill,
+  Section,
+  StatusBadge,
+  TelefonoWhatsApp,
+} from "@/components/app/ui";
 import { Field, FormGrid, SelectInput, TextArea, TextInput } from "@/components/app/form";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +62,7 @@ export const Route = createFileRoute("/pacientes/$id")({
   component: FichaPaciente,
 });
 
-type Pestana = "ficha" | "odontograma" | "historial";
+type Pestana = "ficha" | "odontograma" | "periodontograma" | "historial";
 
 const tonoEstado = { activo: "success", seguimiento: "warning", nuevo: "info" } as const;
 const textoEstado = { activo: "Activo", seguimiento: "Seguimiento", nuevo: "Nuevo" } as const;
@@ -52,22 +72,78 @@ function FichaPaciente() {
   const paciente = usePaciente(id);
   const citas = useCitasDePaciente(id);
   const cobros = useCobrosDePaciente(id);
-  const odontograma = useOdontograma(id);
+  const cargos = useCargosDePaciente(id);
+  const crearCargo = useCrearCargo();
+  const notas = useNotasClinicas(id);
+  const agregarNota = useAgregarNotaClinica();
+  const historialOdonto = useHistorialOdontograma(id);
   const guardar = useActualizarPaciente();
   const registrar = useRegistrarDiente();
+  const clinica = useClinica();
 
   const [pestana, setPestana] = useState<Pestana>("ficha");
   const [form, setForm] = useState<Partial<Patient>>({});
   const [guardado, setGuardado] = useState(false);
 
+  // Historial de notas/procedimientos: lo que se escribe aqui se agrega
+  // a la lista, no reemplaza nada.
+  const [notaNueva, setNotaNueva] = useState("");
+  const [fechaNotaNueva, setFechaNotaNueva] = useState(hoyISO());
+
+  // Nuevo cargo: lo unico que hace que un paciente le quede debiendo
+  // algo al sistema (antes solo se podia bajar el saldo, nunca subirlo).
+  // En una clinica normalmente se paga al momento, no es un prestamo —
+  // por eso el formulario pregunta como quedo el pago, no asume que debe.
+  const [conceptoCargo, setConceptoCargo] = useState("");
+  const [montoCargo, setMontoCargo] = useState(0);
+  const [fechaCargo, setFechaCargo] = useState(hoyISO());
+  const [estadoPagoCargo, setEstadoPagoCargo] = useState<"pagado" | "parcial" | "debe">("pagado");
+  const [montoPagadoCargo, setMontoPagadoCargo] = useState(0);
+  const [metodoPagoCargo, setMetodoPagoCargo] = useState<Payment["method"]>("efectivo");
+  const crearCobro = useCrearCobro();
+
+  // Abonar a un cargo que quedo debiendo (o parcial): se abre un
+  // formulario chiquito justo debajo de esa fila, para no tener que
+  // ir a otra pantalla a anotar que ya pago.
+  const [abonandoCargoId, setAbonandoCargoId] = useState<string | null>(null);
+  const [montoAbono, setMontoAbono] = useState(0);
+  const [metodoAbono, setMetodoAbono] = useState<Payment["method"]>("efectivo");
+
+  // Periodontograma: no hay "el estado actual" como en el odontograma,
+  // sino una lista de examenes (uno por dia) y el que esta abierto ahora.
+  const examenesPerio = usePeriodontogramas(id);
+  const [examenPerioId, setExamenPerioId] = useState<string | null>(null);
+  const examenPerio = usePeriodontograma(examenPerioId);
+  const crearExamenPerio = useCrearPeriodontograma();
+  const guardarDientePerio = useGuardarDientePerio();
+
+  // El examen justo antes de este, para poder comparar como va el
+  // paciente ("el sangrado bajo de 40% a 32%"). Puede no haber ninguno,
+  // si este es el primer examen que se le hace.
+  const indiceExamenActual = (examenesPerio.data ?? []).findIndex((e) => e.id === examenPerioId);
+  const examenAnteriorResumen =
+    indiceExamenActual >= 0 ? (examenesPerio.data ?? [])[indiceExamenActual + 1] : undefined;
+  const examenPerioAnterior = usePeriodontograma(examenAnteriorResumen?.id ?? null);
+
   useEffect(() => {
     if (paciente.data) setForm(paciente.data);
   }, [paciente.data]);
 
-  // Lo que viene de la base, convertido al formato que entiende el dibujo.
-  const estados: MapaEstados = {};
-  for (const e of odontograma.data ?? []) {
-    estados[clave(e.tooth, e.surface as Cara)] = e.condition as Estado;
+  // Al entrar, se abre solo el examen mas reciente.
+  useEffect(() => {
+    if (examenPerioId === null && examenesPerio.data && examenesPerio.data.length > 0) {
+      setExamenPerioId(examenesPerio.data[0]!.id);
+    }
+  }, [examenesPerio.data, examenPerioId]);
+
+  // Abre un examen nuevo heredando piezas ausentes y furca del anterior,
+  // para que la doctora no tenga que volver a marcarlas.
+  async function nuevoExamenPerio() {
+    const creado = await crearExamenPerio.mutateAsync({
+      pacienteId: id,
+      copiarDe: examenPerio.data?.dientes,
+    });
+    setExamenPerioId(creado.id);
   }
 
   function cambiar<K extends keyof Patient>(campo: K, valor: Patient[K]) {
@@ -87,12 +163,112 @@ function FichaPaciente() {
     }
   }
 
-  function pintar(diente: string, cara: Cara, estado: Estado) {
+  async function agregarNotaAlHistorial(e: FormEvent) {
+    e.preventDefault();
+    if (!notaNueva.trim()) return;
+    try {
+      await agregarNota.mutateAsync({
+        patientId: id,
+        fecha: fechaNotaNueva,
+        nota: notaNueva.trim(),
+      });
+      setNotaNueva("");
+      setFechaNotaNueva(hoyISO());
+    } catch {
+      // El error se muestra abajo, junto al formulario.
+    }
+  }
+
+  async function agregarCargo(e: FormEvent) {
+    e.preventDefault();
+    if (!conceptoCargo.trim() || montoCargo <= 0) return;
+
+    // Cuanto se pago en el momento, segun lo que se eligio arriba.
+    // "Pagado" = todo, "Debe" = nada, "Parcial" = lo que se escribio.
+    const pagadoAhora =
+      estadoPagoCargo === "pagado"
+        ? montoCargo
+        : estadoPagoCargo === "parcial"
+          ? montoPagadoCargo
+          : 0;
+
+    try {
+      // El cargo siempre se registra por el monto completo del
+      // tratamiento — eso sube el saldo. Si se pago algo en el momento,
+      // se registra tambien como un cobro aparte, que lo vuelve a bajar.
+      // El resultado neto es el saldo real que queda debiendo (si algo).
+      const cargoCreado = await crearCargo.mutateAsync({
+        patient_id: id,
+        concepto: conceptoCargo.trim(),
+        monto: montoCargo,
+        fecha: fechaCargo,
+      });
+      if (pagadoAhora > 0) {
+        await crearCobro.mutateAsync({
+          patient_id: id,
+          concept: `${conceptoCargo.trim()} (pago)`,
+          method: metodoPagoCargo,
+          amount: pagadoAhora,
+          date: fechaCargo,
+          notes: "",
+          cargo_id: cargoCreado.id,
+        });
+      }
+      setConceptoCargo("");
+      setMontoCargo(0);
+      setMontoPagadoCargo(0);
+      setEstadoPagoCargo("pagado");
+      setFechaCargo(hoyISO());
+      await paciente.refetch();
+    } catch {
+      // El error se muestra abajo, junto al formulario.
+    }
+  }
+
+  function abrirAbono(cargoId: string, sugerido: number) {
+    setAbonandoCargoId(cargoId);
+    setMontoAbono(sugerido);
+    setMetodoAbono("efectivo");
+    crearCobro.reset();
+  }
+
+  function cerrarAbono() {
+    setAbonandoCargoId(null);
+    setMontoAbono(0);
+  }
+
+  // Anota que un cargo que quedo debiendo (total o en parte) ya se
+  // termino de pagar, o se pago algo mas. No edita el cargo original —
+  // agrega un cobro nuevo atado a el, igual que todo lo demas en el
+  // sistema: nada se sobrescribe, se va acumulando.
+  async function registrarAbono(e: FormEvent, cargo: { id: string; concepto: string }) {
+    e.preventDefault();
+    if (montoAbono <= 0) return;
+    try {
+      await crearCobro.mutateAsync({
+        patient_id: id,
+        concept: `${cargo.concepto} (abono)`,
+        method: metodoAbono,
+        amount: montoAbono,
+        date: hoyISO(),
+        notes: "",
+        cargo_id: cargo.id,
+      });
+      cerrarAbono();
+      await paciente.refetch();
+    } catch {
+      // El error se muestra en el formulario del abono.
+    }
+  }
+
+  function pintar(r: AccionDiente) {
     registrar.mutate({
       patient_id: id,
-      tooth: diente,
-      surface: cara,
-      condition: estado,
+      tooth: r.diente,
+      surface: r.cara,
+      condition: r.estado,
+      planned: r.planificado,
+      notes: r.notas ?? "",
     });
   }
 
@@ -107,7 +283,7 @@ function FichaPaciente() {
 
   if (paciente.isError || !paciente.data) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <Link to="/pacientes">
           <Button variant="outline">
             <ArrowLeft /> Volver a Pacientes
@@ -115,7 +291,7 @@ function FichaPaciente() {
         </Link>
         <div className="rounded-xl bg-danger-soft px-4 py-8 text-center">
           <TriangleAlert className="mx-auto size-6 text-danger" />
-          <p className="mt-2 font-semibold text-danger">No se encontro este paciente</p>
+          <p className="mt-2 font-semibold text-danger">No se encontró este paciente</p>
           <p className="mt-1 text-sm text-danger/80">
             {paciente.error?.message ?? "Puede que lo hayan borrado."}
           </p>
@@ -126,18 +302,22 @@ function FichaPaciente() {
 
   const p = paciente.data;
   const edad = edadDesde(p.birth_date);
+  const nombreClinica = clinica.data?.name?.trim() ?? "";
   const listaCitas = citas.data ?? [];
   const listaCobros = cobros.data ?? [];
   const totalCobrado = listaCobros.reduce((s, c) => s + Number(c.amount), 0);
+  const listaCargos = cargos.data ?? [];
+  const listaNotas = notas.data ?? [];
 
   const pestanas: { key: Pestana; label: string; icono: typeof FileText }[] = [
     { key: "ficha", label: "Ficha", icono: FileText },
     { key: "odontograma", label: "Odontograma", icono: Check },
+    { key: "periodontograma", label: "Periodontograma", icono: Activity },
     { key: "historial", label: "Historial", icono: CalendarDays },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Link to="/pacientes" className="inline-block">
         <Button variant="ghost" size="sm">
           <ArrowLeft /> Pacientes
@@ -145,25 +325,35 @@ function FichaPaciente() {
       </Link>
 
       {/* Cabecera del paciente */}
-      <div className="surface flex flex-wrap items-center gap-4 p-5 sm:p-6">
-        <InitialsAvatar name={p.name} className="size-14 text-lg" />
-        <div className="min-w-0 flex-1">
-          <h1 className="text-[24px] font-bold leading-tight tracking-tight sm:text-[28px]">
-            {p.name}
-          </h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-            {p.file_number && <span className="font-medium">Ficha #{p.file_number}</span>}
-            {edad !== null && <span>{edad} anos</span>}
-            {p.phone && (
-              <span className="inline-flex items-center gap-1.5">
-                <Phone className="size-3.5" /> {p.phone}
-              </span>
-            )}
-          </p>
+      {/* En pantallas estrechas los botones bajan a su propia fila: si no,
+          le roban el ancho al nombre y este parte en dos lineas. */}
+      <div className="surface grid gap-4 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="flex min-w-0 items-center gap-4">
+          <InitialsAvatar name={p.name} className="size-14 text-lg" />
+          <div className="min-w-0">
+            <h1 className="text-[24px] font-bold leading-tight tracking-tight sm:text-[28px]">
+              {p.name}
+            </h1>
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              {p.file_number && <span className="font-medium">Ficha #{p.file_number}</span>}
+              {edad !== null && <span>{edad} años</span>}
+              {p.phone && <TelefonoWhatsApp telefono={p.phone} />}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           {Number(p.balance) > 0 && <Pill tone="warning">Debe {formatDOP(Number(p.balance))}</Pill>}
           <Pill tone={tonoEstado[p.status]}>{textoEstado[p.status]}</Pill>
+          {enlaceLlamada(p.phone) && (
+            <a
+              href={enlaceLlamada(p.phone) ?? undefined}
+              title={`Llamar a ${p.phone}`}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border-strong bg-card px-4 text-sm font-semibold transition-colors hover:border-primary/40 hover:bg-primary-soft/50"
+            >
+              <Phone className="size-4" /> Llamar
+            </a>
+          )}
+          <BotonWhatsApp telefono={p.phone} mensaje={saludo(p.name, nombreClinica)} />
         </div>
       </div>
 
@@ -197,7 +387,7 @@ function FichaPaciente() {
                   required
                 />
               </Field>
-              <Field label="Numero de ficha">
+              <Field label="Número de ficha">
                 <TextInput
                   value={form.file_number ?? ""}
                   onChange={(e) => cambiar("file_number", e.target.value)}
@@ -207,7 +397,7 @@ function FichaPaciente() {
             </FormGrid>
 
             <FormGrid>
-              <Field label="Telefono">
+              <Field label="Teléfono">
                 <TextInput
                   type="tel"
                   value={form.phone ?? ""}
@@ -280,103 +470,532 @@ function FichaPaciente() {
 
       {/* ---------- ODONTOGRAMA ---------- */}
       {pestana === "odontograma" && (
-        <div className="space-y-6">
-          <Section title="Odontograma">
-            {odontograma.isPending ? (
-              <div className="h-64 animate-pulse rounded-xl bg-muted" aria-hidden />
-            ) : odontograma.isError ? (
-              <div className="rounded-xl bg-danger-soft px-4 py-6 text-center">
-                <TriangleAlert className="mx-auto size-6 text-danger" />
-                <p className="mt-2 text-sm text-danger">{odontograma.error.message}</p>
-                <p className="mt-2 text-xs text-danger/80">
-                  Si dice que falta una tabla, es que no se ha corrido la migracion del odontograma
-                  en Supabase.
+        <Section title="Odontograma">
+          {historialOdonto.isPending ? (
+            <div className="h-64 animate-pulse rounded-xl bg-muted" aria-hidden />
+          ) : historialOdonto.isError ? (
+            <div className="rounded-xl bg-danger-soft px-4 py-6 text-center">
+              <TriangleAlert className="mx-auto size-6 text-danger" />
+              <p className="mt-2 text-sm text-danger">{historialOdonto.error.message}</p>
+              <p className="mt-2 text-xs text-danger/80">
+                Si dice que falta una columna o una tabla, es que no se ha corrido alguna migracion
+                del odontograma en Supabase.
+              </p>
+            </div>
+          ) : (
+            <>
+              <Odontograma historial={historialOdonto.data ?? []} onPintar={pintar} />
+              {registrar.isError && (
+                <p role="alert" className="mt-3 text-sm text-danger">
+                  {registrar.error.message}
                 </p>
+              )}
+              <div className="mt-3 border-t border-dashed border-border pt-3">
+                <LeyendaOdontograma />
               </div>
-            ) : (
-              <>
-                <Odontograma estados={estados} onPintar={pintar} />
-                {registrar.isError && (
-                  <p role="alert" className="mt-4 text-sm text-danger">
-                    {registrar.error.message}
-                  </p>
-                )}
-              </>
-            )}
-          </Section>
+            </>
+          )}
+        </Section>
+      )}
 
-          <Section title="Leyenda">
-            <LeyendaOdontograma />
-            <p className="mt-4 text-sm text-muted-foreground">
-              Cada cambio queda guardado con su fecha y quien lo registro. Nada se sobrescribe: si
-              marcas algo por error, marcas el estado correcto encima y la historia queda completa.
-            </p>
-          </Section>
-        </div>
+      {/* ---------- PERIODONTOGRAMA ---------- */}
+      {pestana === "periodontograma" && (
+        <Section title="Periodontograma">
+          {examenesPerio.isPending ? (
+            <div className="h-64 animate-pulse rounded-xl bg-muted" aria-hidden />
+          ) : examenesPerio.isError ? (
+            <div className="rounded-xl bg-danger-soft px-4 py-6 text-center">
+              <TriangleAlert className="mx-auto size-6 text-danger" />
+              <p className="mt-2 text-sm text-danger">{examenesPerio.error.message}</p>
+              <p className="mt-2 text-xs text-danger/80">
+                Si dice que falta una tabla, es que no se ha corrido la migración del
+                periodontograma en Supabase.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {(examenesPerio.data ?? []).map((ex) => (
+                  <button
+                    key={ex.id}
+                    type="button"
+                    onClick={() => setExamenPerioId(ex.id)}
+                    className={cn(
+                      "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+                      examenPerioId === ex.id
+                        ? "border-primary bg-primary-soft text-primary-soft-foreground"
+                        : "border-border-strong bg-card text-muted-foreground hover:border-primary/40",
+                    )}
+                  >
+                    {formatShortDate(ex.fecha)}
+                  </button>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void nuevoExamenPerio()}
+                  disabled={crearExamenPerio.isPending}
+                >
+                  {crearExamenPerio.isPending ? "Creando..." : "+ Nuevo examen"}
+                </Button>
+              </div>
+
+              {crearExamenPerio.isError && (
+                <p role="alert" className="text-sm text-danger">
+                  {crearExamenPerio.error.message}
+                </p>
+              )}
+
+              {(examenesPerio.data?.length ?? 0) === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Este paciente todavía no tiene ningún examen periodontal. Dale a "Nuevo examen"
+                  para empezar el primero.
+                </p>
+              ) : examenPerio.isPending ? (
+                <div className="h-64 animate-pulse rounded-xl bg-muted" aria-hidden />
+              ) : examenPerio.data ? (
+                <>
+                  <IndicesPeriodontal
+                    dientes={examenPerio.data.dientes}
+                    fecha={examenPerio.data.examen.fecha}
+                    dientesAnterior={examenPerioAnterior.data?.dientes}
+                    fechaAnterior={examenAnteriorResumen?.fecha}
+                  />
+
+                  <div className="my-5 border-t border-dashed border-border-strong" />
+
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Vista para explicarle al paciente
+                    </h3>
+                    <GraficoPeriodontal
+                      examenId={examenPerio.data.examen.id}
+                      dientes={examenPerio.data.dientes}
+                    />
+                  </div>
+
+                  <div className="my-5 border-t border-dashed border-border-strong" />
+
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Rejilla de captura — donde se llenan los números
+                    </h3>
+                    <Periodontograma
+                      examenId={examenPerio.data.examen.id}
+                      dientes={examenPerio.data.dientes}
+                      onGuardarDiente={(fila) => guardarDientePerio.mutate(fila)}
+                    />
+                  </div>
+                  {guardarDientePerio.isError && (
+                    <p role="alert" className="mt-3 text-sm text-danger">
+                      {guardarDientePerio.error.message}
+                    </p>
+                  )}
+                </>
+              ) : null}
+            </div>
+          )}
+        </Section>
       )}
 
       {/* ---------- HISTORIAL ---------- */}
       {pestana === "historial" && (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <Section title="Citas">
-            {citas.isPending ? (
-              <div className="h-24 animate-pulse rounded-xl bg-muted" aria-hidden />
-            ) : listaCitas.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Este paciente todavia no tiene citas.
+        <div className="space-y-4">
+          <Section title="Procedimientos">
+            <p className="mb-3 text-sm text-muted-foreground">
+              Lo que se le ha ido haciendo al paciente, visita tras visita. Cada nota se agrega al
+              historial — ninguna borra a la anterior.
+            </p>
+            <form
+              onSubmit={agregarNotaAlHistorial}
+              className="flex flex-col gap-3 sm:flex-row sm:items-end"
+            >
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Qué se hizo
+                </label>
+                <TextInput
+                  value={notaNueva}
+                  onChange={(e) => setNotaNueva(e.target.value)}
+                  placeholder="Ej: Limpieza dental, extracción del 26..."
+                />
+              </div>
+              <div className="sm:w-40">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Fecha
+                </label>
+                <TextInput
+                  type="date"
+                  value={fechaNotaNueva}
+                  onChange={(e) => setFechaNotaNueva(e.target.value)}
+                />
+              </div>
+              <Button type="submit" disabled={agregarNota.isPending || !notaNueva.trim()}>
+                {agregarNota.isPending ? "Agregando..." : "Agregar al historial"}
+              </Button>
+            </form>
+            {agregarNota.isError && (
+              <p role="alert" className="mt-2 text-sm text-danger">
+                {agregarNota.error.message}
               </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {listaCitas.map((c) => (
-                  <li key={c.id} className="flex items-center gap-3 py-3">
-                    <div className="w-24 shrink-0">
-                      <p className="text-sm font-semibold">{formatShortDate(c.date)}</p>
-                      <p className="text-xs tabular-nums text-muted-foreground">
-                        {c.time.slice(0, 5)}
-                      </p>
-                    </div>
-                    <p className="min-w-0 flex-1 truncate text-[15px]">{c.treatment || "Cita"}</p>
-                    <StatusBadge status={c.status} />
-                  </li>
-                ))}
-              </ul>
             )}
-          </Section>
 
-          <Section title="Cobros">
-            <div className="rounded-xl bg-primary-soft/60 p-4">
-              <p className="text-sm text-primary-soft-foreground">Total pagado</p>
-              <p className="mt-1 text-[26px] font-bold leading-none tracking-tight text-primary-soft-foreground">
-                {formatDOP(totalCobrado)}
-              </p>
-            </div>
-            {listaCobros.length === 0 ? (
-              <p className="py-5 text-center text-sm text-muted-foreground">
-                Sin cobros registrados.
-              </p>
-            ) : (
-              <ul className="mt-2 divide-y divide-border">
-                {listaCobros.map((c) => (
-                  <li key={c.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-success-soft text-success">
-                        <Wallet className="size-3.5" />
+            <div className="mt-4 border-t border-border pt-4">
+              {notas.isPending ? (
+                <div className="h-20 animate-pulse rounded-xl bg-muted" aria-hidden />
+              ) : listaNotas.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  Todavía no hay ningún procedimiento anotado. Se van a ir acumulando aquí, con
+                  fecha, a medida que agregues.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {listaNotas.map((n) => (
+                    <li key={n.id} className="flex items-start gap-3 py-3">
+                      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                        <ClipboardList className="size-3.5" />
                       </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{c.concept || "Cobro"}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {formatShortDate(c.date)} · {c.method}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] leading-snug">{n.nota}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {formatShortDate(n.fecha)}
                         </p>
                       </div>
-                    </div>
-                    <span className="text-sm font-semibold tabular-nums">
-                      {formatDOP(Number(c.amount))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </Section>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+            <Section title="Citas">
+              {citas.isPending ? (
+                <div className="h-24 animate-pulse rounded-xl bg-muted" aria-hidden />
+              ) : listaCitas.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Este paciente todavía no tiene citas.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {listaCitas.map((c) => (
+                    <li key={c.id} className="flex items-center gap-3 py-3">
+                      <div className="w-24 shrink-0">
+                        <p className="text-sm font-semibold">{formatShortDate(c.date)}</p>
+                        <p className="text-xs tabular-nums text-muted-foreground">
+                          {c.time.slice(0, 5)}
+                        </p>
+                      </div>
+                      <p className="min-w-0 flex-1 truncate text-[15px]">{c.treatment || "Cita"}</p>
+                      <StatusBadge status={c.status} />
+                      {/* Solo en las que aun no han pasado: recordar algo ya hecho no sirve. */}
+                      {c.date >= hoyISO() &&
+                        (c.status === "confirmada" || c.status === "pendiente") && (
+                          <BotonWhatsApp
+                            telefono={p.phone}
+                            size="sm"
+                            etiqueta="Recordar"
+                            mensaje={mensajeRecordatorio(
+                              p.name,
+                              nombreClinica,
+                              formatShortDate(c.date),
+                              c.time.slice(0, 5),
+                            )}
+                          />
+                        )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            <Section title="Cargos">
+              <p className="mb-3 text-sm text-muted-foreground">
+                Lo que se le cobra al paciente por un tratamiento. La mayoría de las veces se paga
+                al momento — para eso están las opciones de abajo. Solo queda "debiendo" cuando tú
+                elijas esa opción.
+              </p>
+              <form onSubmit={agregarCargo} className="flex flex-col gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Concepto
+                  </label>
+                  <TextInput
+                    value={conceptoCargo}
+                    onChange={(e) => setConceptoCargo(e.target.value)}
+                    placeholder="Ej: Extracción del 26"
+                  />
+                </div>
+                <FormGrid className="sm:grid-cols-[1fr_140px]">
+                  <Field label="Monto en RD$">
+                    <TextInput
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={String(montoCargo)}
+                      onChange={(e) => setMontoCargo(Number(e.target.value))}
+                    />
+                  </Field>
+                  <Field label="Fecha">
+                    <TextInput
+                      type="date"
+                      value={fechaCargo}
+                      onChange={(e) => setFechaCargo(e.target.value)}
+                    />
+                  </Field>
+                </FormGrid>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    ¿Cómo quedó el pago?
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        ["pagado", "Pagó todo"],
+                        ["parcial", "Pagó parte"],
+                        ["debe", "Debe todo"],
+                      ] as const
+                    ).map(([valor, etiqueta]) => (
+                      <button
+                        key={valor}
+                        type="button"
+                        onClick={() => setEstadoPagoCargo(valor)}
+                        className={cn(
+                          "h-9 shrink-0 rounded-lg border px-3.5 text-sm font-medium transition-colors",
+                          estadoPagoCargo === valor
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border-strong bg-card text-muted-foreground hover:border-primary/40 hover:text-primary",
+                        )}
+                      >
+                        {etiqueta}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {estadoPagoCargo !== "debe" && (
+                  <FormGrid className="sm:grid-cols-[1fr_140px]">
+                    {estadoPagoCargo === "parcial" && (
+                      <Field label="Cuánto pagó ahora, en RD$">
+                        <TextInput
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={String(montoPagadoCargo)}
+                          onChange={(e) => setMontoPagadoCargo(Number(e.target.value))}
+                        />
+                      </Field>
+                    )}
+                    <Field label="Forma de pago">
+                      <SelectInput
+                        value={metodoPagoCargo}
+                        onChange={(e) => setMetodoPagoCargo(e.target.value as Payment["method"])}
+                      >
+                        <option value="efectivo">Efectivo</option>
+                        <option value="tarjeta">Tarjeta</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="seguro">Seguro</option>
+                      </SelectInput>
+                    </Field>
+                  </FormGrid>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={
+                    crearCargo.isPending ||
+                    crearCobro.isPending ||
+                    !conceptoCargo.trim() ||
+                    montoCargo <= 0 ||
+                    (estadoPagoCargo === "parcial" &&
+                      (montoPagadoCargo <= 0 || montoPagadoCargo >= montoCargo))
+                  }
+                  className="self-start"
+                >
+                  <Plus />{" "}
+                  {crearCargo.isPending || crearCobro.isPending ? "Agregando..." : "Agregar cargo"}
+                </Button>
+              </form>
+              {(crearCargo.isError || crearCobro.isError) && (
+                <p role="alert" className="mt-2 text-sm text-danger">
+                  {crearCargo.error?.message ?? crearCobro.error?.message}
+                </p>
+              )}
+
+              <div className="mt-4 border-t border-border pt-2">
+                {listaCargos.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    Sin cargos registrados.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {listaCargos.map((c) => {
+                      // Cuanto se le ha abonado a ESTE cargo en concreto
+                      // (puede haber sido en el momento, o despues con
+                      // "Abonar"). Lo que sobra del monto es lo que falta.
+                      const pagadoDelCargo = listaCobros
+                        .filter((cobro) => cobro.cargo_id === c.id)
+                        .reduce((s, cobro) => s + Number(cobro.amount), 0);
+                      const restante = Math.max(0, Number(c.monto) - pagadoDelCargo);
+                      const estaPagado = restante <= 0;
+
+                      return (
+                        <li key={c.id} className="py-3">
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={cn(
+                                "grid size-8 shrink-0 place-items-center rounded-full",
+                                estaPagado
+                                  ? "bg-success-soft text-success"
+                                  : "bg-warning-soft text-warning",
+                              )}
+                            >
+                              <Wallet className="size-3.5" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">{c.concepto}</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {formatShortDate(c.fecha)}
+                              </p>
+                            </div>
+                            <p className="shrink-0 text-sm font-semibold tabular-nums">
+                              {formatDOP(Number(c.monto))}
+                            </p>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 pl-11">
+                            <p
+                              className={cn(
+                                "text-xs font-medium",
+                                estaPagado
+                                  ? "text-success"
+                                  : pagadoDelCargo > 0
+                                    ? "text-warning"
+                                    : "text-danger",
+                              )}
+                            >
+                              {estaPagado
+                                ? "Pagado"
+                                : pagadoDelCargo > 0
+                                  ? `Abonó ${formatDOP(pagadoDelCargo)} · debe ${formatDOP(restante)}`
+                                  : `Debe ${formatDOP(restante)}`}
+                            </p>
+                            {!estaPagado && abonandoCargoId !== c.id && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => abrirAbono(c.id, restante)}
+                              >
+                                Abonar
+                              </Button>
+                            )}
+                          </div>
+
+                          {abonandoCargoId === c.id && (
+                            <form
+                              onSubmit={(e) => void registrarAbono(e, c)}
+                              className="mt-3 flex flex-col gap-3 rounded-xl bg-muted/60 p-3"
+                            >
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                                    Monto abonado, en RD$
+                                  </label>
+                                  <TextInput
+                                    type="number"
+                                    min={0}
+                                    step={1}
+                                    value={String(montoAbono)}
+                                    onChange={(e) => setMontoAbono(Number(e.target.value))}
+                                    autoFocus
+                                  />
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                                    Forma de pago
+                                  </label>
+                                  <SelectInput
+                                    value={metodoAbono}
+                                    onChange={(e) =>
+                                      setMetodoAbono(e.target.value as Payment["method"])
+                                    }
+                                  >
+                                    <option value="efectivo">Efectivo</option>
+                                    <option value="tarjeta">Tarjeta</option>
+                                    <option value="transferencia">Transferencia</option>
+                                    <option value="seguro">Seguro</option>
+                                  </SelectInput>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="submit"
+                                  size="sm"
+                                  disabled={crearCobro.isPending || montoAbono <= 0}
+                                >
+                                  {crearCobro.isPending ? "Guardando..." : "Confirmar"}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={cerrarAbono}
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </form>
+                          )}
+                          {abonandoCargoId === c.id && crearCobro.isError && (
+                            <p role="alert" className="mt-2 text-sm text-danger">
+                              {crearCobro.error.message}
+                            </p>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </Section>
+
+            <Section title="Cobros">
+              <div className="rounded-xl bg-primary-soft/60 p-4">
+                <p className="text-sm text-primary-soft-foreground">Total pagado</p>
+                <p className="mt-1 text-[26px] font-bold leading-none tracking-tight text-primary-soft-foreground">
+                  {formatDOP(totalCobrado)}
+                </p>
+              </div>
+              {listaCobros.length === 0 ? (
+                <p className="py-5 text-center text-sm text-muted-foreground">
+                  Sin cobros registrados.
+                </p>
+              ) : (
+                <ul className="mt-2 divide-y divide-border">
+                  {listaCobros.map((c) => (
+                    <li key={c.id} className="flex items-center justify-between gap-3 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-success-soft text-success">
+                          <Wallet className="size-3.5" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{c.concept || "Cobro"}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {formatShortDate(c.date)} · {c.method}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums">
+                        {formatDOP(Number(c.amount))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          </div>
         </div>
       )}
     </div>

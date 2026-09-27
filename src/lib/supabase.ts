@@ -9,7 +9,7 @@ const anonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined;
 if (!url || !anonKey) {
   throw new Error(
     "Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY. " +
-      "Revisa el archivo .env.local en la raiz del proyecto.",
+      "Revisa el archivo .env.local en la raíz del proyecto.",
   );
 }
 

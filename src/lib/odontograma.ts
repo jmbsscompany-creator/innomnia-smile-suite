@@ -49,7 +49,7 @@ export const ESTADOS: InfoEstado[] = [
   {
     clave: "caries",
     nombre: "Caries",
-    ayuda: "Lesion activa que hay que tratar.",
+    ayuda: "Lesión activa que hay que tratar.",
     color: "var(--odo-caries)",
     dienteCompleto: false,
   },
@@ -63,7 +63,7 @@ export const ESTADOS: InfoEstado[] = [
   {
     clave: "sellante",
     nombre: "Sellante",
-    ayuda: "Sellado preventivo, sobre todo en ninos.",
+    ayuda: "Sellado preventivo, sobre todo en niños.",
     color: "var(--odo-sellante)",
     dienteCompleto: false,
   },
@@ -90,8 +90,8 @@ export const ESTADOS: InfoEstado[] = [
   },
   {
     clave: "protesis",
-    nombre: "Protesis",
-    ayuda: "Forma parte de una protesis o puente.",
+    nombre: "Prótesis",
+    ayuda: "Forma parte de una prótesis o puente.",
     color: "var(--odo-protesis)",
     dienteCompleto: true,
   },
@@ -104,15 +104,15 @@ export const ESTADOS: InfoEstado[] = [
   },
   {
     clave: "extraccion_indicada",
-    nombre: "Extraccion indicada",
-    ayuda: "Hay que sacarlo, todavia esta puesto.",
+    nombre: "Extracción indicada",
+    ayuda: "Hay que sacarlo, todavía está puesto.",
     color: "var(--odo-extraccion)",
     dienteCompleto: true,
   },
   {
     clave: "ausente",
     nombre: "Ausente",
-    ayuda: "Ya no esta en boca.",
+    ayuda: "Ya no está en boca.",
     color: "var(--odo-ausente)",
     dienteCompleto: true,
   },
@@ -121,6 +121,26 @@ export const ESTADOS: InfoEstado[] = [
 export const ESTADO_POR_CLAVE: Record<Estado, InfoEstado> = Object.fromEntries(
   ESTADOS.map((e) => [e.clave, e]),
 ) as Record<Estado, InfoEstado>;
+
+/**
+ * Que tan "grave" es cada estado, de menor a mayor. Sirve solo para la
+ * Vista estándar, donde un diente se resume en UN color: si tiene varias
+ * caras marcadas, se usa la mas grave para el resumen (una caries no debe
+ * "ganarle" visualmente a una extraccion indicada, por ejemplo).
+ */
+export const SEVERIDAD: Record<Estado, number> = {
+  sano: 0,
+  sellante: 1,
+  obturado: 2,
+  corona: 3,
+  protesis: 3,
+  endodoncia: 4,
+  implante: 4,
+  caries: 5,
+  fractura: 6,
+  extraccion_indicada: 7,
+  ausente: 8,
+};
 
 /* ---------- Que dientes hay ---------- */
 
@@ -193,6 +213,19 @@ export function carasDelDiente(diente: string): {
     derecha: zonaDerecha,
     centro: "oclusal",
   };
+}
+
+/** Familia anatomica de la pieza. Decide con que forma se dibuja. */
+export type TipoDiente = "incisivo" | "canino" | "premolar" | "molar";
+
+export function tipoDiente(diente: string): TipoDiente {
+  const pos = Number(diente[1]);
+  const leche = Number(diente[0]) >= 5;
+  if (pos <= 2) return "incisivo";
+  if (pos === 3) return "canino";
+  // En los dientes de leche no hay premolares: las posiciones 4 y 5 ya son molares.
+  if (pos <= 5) return leche ? "molar" : "premolar";
+  return "molar";
 }
 
 export const NOMBRE_CARA: Record<Cara, string> = {

@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 const title = "Servicios y precios — INNOMNIA Dental";
 const description =
-  "Catalogo de tratamientos de la clinica con duracion y precios en pesos dominicanos.";
+  "Catálogo de tratamientos de la clínica con duración y precios en pesos dominicanos.";
 
 export const Route = createFileRoute("/servicios")({
   head: () => ({
@@ -55,6 +55,12 @@ function ServicesPage() {
 
   const servicios = data ?? [];
   const vacio = !isPending && !isError && servicios.length === 0;
+
+  // De la lista base, los que la clinica todavia no tiene. Se comparan por
+  // nombre normalizado, asi "Limpieza dental" y "limpieza  dental" cuentan
+  // como el mismo y no se duplican.
+  const yaEstan = new Set(servicios.map((x) => normalizar(x.name).trim()));
+  const faltanDeLaBase = SERVICIOS_BASE.filter((x) => !yaEstan.has(normalizar(x.name).trim()));
 
   // Las categorias salen de lo que realmente hay guardado.
   const categorias = useMemo(
@@ -129,20 +135,41 @@ function ServicesPage() {
   const errorModal = crear.error?.message ?? actualizar.error?.message ?? null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Servicios y Precios"
         subtitle={
           isPending
-            ? "Cargando el catalogo..."
+            ? "Cargando el catálogo..."
             : `${servicios.length} ${servicios.length === 1 ? "tratamiento" : "tratamientos"} · precios en pesos dominicanos (RD$)`
         }
         actions={
           isDentista && !vacio ? (
-            <Button onClick={abrirNuevo}>
-              <Plus /> <span className="hidden sm:inline">Nuevo servicio</span>
-              <span className="sm:hidden">Nuevo</span>
-            </Button>
+            <>
+              {/* Aunque el catalogo ya tenga cosas, la dentista puede traer
+                  los que le falten de la lista base: solo se agregan los que
+                  no existen todavia (se comparan por nombre). */}
+              {faltanDeLaBase.length > 0 && (
+                <Button
+                  variant="outline"
+                  disabled={cargarBase.isPending}
+                  onClick={() => cargarBase.mutate(faltanDeLaBase)}
+                  title={`Agrega ${faltanDeLaBase.length} tratamientos de la lista base que no tienes`}
+                >
+                  <Sparkles />
+                  <span className="hidden sm:inline">
+                    {cargarBase.isPending
+                      ? "Cargando..."
+                      : `Traer ${faltanDeLaBase.length} de la lista base`}
+                  </span>
+                  <span className="sm:hidden">Lista base</span>
+                </Button>
+              )}
+              <Button onClick={abrirNuevo}>
+                <Plus /> <span className="hidden sm:inline">Nuevo servicio</span>
+                <span className="sm:hidden">Nuevo</span>
+              </Button>
+            </>
           ) : undefined
         }
       />
@@ -150,7 +177,7 @@ function ServicesPage() {
       {isError && (
         <div className="rounded-xl bg-danger-soft px-4 py-6 text-center">
           <TriangleAlert className="mx-auto size-6 text-danger" />
-          <p className="mt-2 font-semibold text-danger">No se pudo cargar el catalogo</p>
+          <p className="mt-2 font-semibold text-danger">No se pudo cargar el catálogo</p>
           <p className="mt-1 text-sm text-danger/80">{error.message}</p>
           <Button variant="outline" className="mt-4" onClick={() => void refetch()}>
             Reintentar
@@ -171,9 +198,9 @@ function ServicesPage() {
           <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary-soft text-primary">
             <FileText className="size-7" strokeWidth={1.6} />
           </span>
-          <p className="mt-4 text-[17px] font-semibold">Todavia no hay servicios</p>
+          <p className="mt-4 text-[17px] font-semibold">Todavía no hay servicios</p>
           <p className="mx-auto mt-1.5 max-w-[46ch] text-sm text-muted-foreground">
-            Aqui va el catalogo de tratamientos con sus precios. Lo usaras al agendar citas y al
+            Aquí va el catálogo de tratamientos con sus precios. Lo usarás al agendar citas y al
             cobrar.
           </p>
 
@@ -185,7 +212,7 @@ function ServicesPage() {
                 </p>
                 <p className="mt-1.5 text-sm text-muted-foreground">
                   Carga {SERVICIOS_BASE.length} tratamientos comunes con precios de referencia, y
-                  despues ajustas cada precio a los de tu clinica. Te ahorra escribirlos uno por
+                  después ajustas cada precio a los de tu clínica. Te ahorra escribirlos uno por
                   uno.
                 </p>
               </div>
@@ -209,7 +236,7 @@ function ServicesPage() {
             </>
           ) : (
             <p className="mt-5 text-sm text-muted-foreground">
-              Pidele a la odontologa que cargue el catalogo.
+              Pídele a la odontóloga que cargue el catálogo.
             </p>
           )}
         </div>
@@ -222,7 +249,7 @@ function ServicesPage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar tratamiento, categoria o precio..."
+              placeholder="Buscar tratamiento, categoría o precio..."
               className="ml-2.5 w-full min-w-0 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
             />
           </label>
@@ -246,11 +273,11 @@ function ServicesPage() {
 
           {encontrados.length === 0 && (
             <p className="surface px-4 py-10 text-center text-sm text-muted-foreground">
-              Ningun tratamiento coincide con "{q}".
+              Ningún tratamiento coincide con "{q}".
             </p>
           )}
 
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             {visibles.map((c) => {
               const items = encontrados.filter((s) => s.category === c);
               if (items.length === 0) return null;
@@ -302,7 +329,7 @@ function ServicesPage() {
         title={editando ? "Editar servicio" : "Nuevo servicio"}
         description={
           editando
-            ? "Los cambios se aplican al catalogo completo."
+            ? "Los cambios se aplican al catálogo completo."
             : "Quedara disponible al agendar citas y al cobrar."
         }
         footer={
@@ -325,15 +352,15 @@ function ServicesPage() {
             />
           </Field>
 
-          <Field label="Categoria" hint="Escribe una nueva o elige de la lista.">
+          <Field label="Categoría" hint="Escribe una nueva o elige de la lista.">
             <TextInput
               value={form.category}
               onChange={(e) => cambiar("category", e.target.value)}
-              placeholder="Prevencion"
-              list="lista-categorias"
+              placeholder="Prevención"
+              list="lista-categorías"
               required
             />
-            <datalist id="lista-categorias">
+            <datalist id="lista-categorías">
               {Array.from(new Set([...categorias, ...CATEGORIAS_SUGERIDAS])).map((c) => (
                 <option key={c} value={c} />
               ))}
@@ -351,7 +378,7 @@ function ServicesPage() {
                 required
               />
             </Field>
-            <Field label="Duracion en minutos">
+            <Field label="Duración en minutos">
               <TextInput
                 type="number"
                 min={5}
@@ -363,11 +390,11 @@ function ServicesPage() {
             </Field>
           </FormGrid>
 
-          <Field label="Descripcion">
+          <Field label="Descripción">
             <TextArea
               value={form.description}
               onChange={(e) => cambiar("description", e.target.value)}
-              placeholder="Que incluye el tratamiento, en palabras que el paciente entienda."
+              placeholder="Qué incluye el tratamiento, en palabras que el paciente entienda."
             />
           </Field>
 

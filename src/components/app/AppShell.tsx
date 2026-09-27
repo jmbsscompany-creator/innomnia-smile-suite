@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  Bell,
+  Boxes,
   CalendarDays,
   ChevronDown,
   FileText,
@@ -15,6 +15,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { CampanaNotificaciones } from "./Notificaciones";
 import { InitialsAvatar } from "./ui";
 
 const nav = [
@@ -22,6 +23,7 @@ const nav = [
   { to: "/citas", label: "Agenda", icon: CalendarDays },
   { to: "/pacientes", label: "Pacientes", icon: Users },
   { to: "/servicios", label: "Servicios y Precios", icon: FileText },
+  { to: "/inventario", label: "Inventario", icon: Boxes },
   { to: "/configuracion", label: "Configuración", icon: Settings },
 ] as const;
 
@@ -63,7 +65,7 @@ function SidebarContent({ compact, onNavigate }: { compact: boolean; onNavigate?
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
-      <div className={cn("px-6 pt-7 pb-6", compact && "px-3 pt-5")}>
+      <div className={cn("px-5 pt-5 pb-4", compact && "px-3 pt-4")}>
         <Logo compact={compact} />
       </div>
 
@@ -77,8 +79,8 @@ function SidebarContent({ compact, onNavigate }: { compact: boolean; onNavigate?
               onClick={onNavigate}
               title={item.label}
               className={cn(
-                "group relative flex items-center gap-3.5 rounded-xl py-3 text-[15px] font-medium transition-colors",
-                compact ? "size-12 justify-center" : "px-4",
+                "group relative flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-colors",
+                compact ? "size-10 justify-center" : "px-3.5",
                 active
                   ? "bg-primary-soft text-primary"
                   : "text-sidebar-foreground hover:bg-muted hover:text-foreground",
@@ -96,8 +98,8 @@ function SidebarContent({ compact, onNavigate }: { compact: boolean; onNavigate?
 
       <div className="mt-auto relative">
         {!compact && (
-          <div className="relative z-10 px-7 pb-8">
-            <ToothMark className="size-11 text-primary/80" />
+          <div className="relative z-10 px-5 pb-5">
+            <ToothMark className="size-9 text-primary/80" />
             <p className="mt-4 text-[22px] font-medium leading-tight text-primary-soft-foreground/85">
               Sonrisas
               <br />
@@ -142,7 +144,7 @@ function UserMenu() {
         aria-haspopup="menu"
         className="flex items-center gap-3 rounded-xl py-1 pl-1 pr-2 transition-colors hover:bg-muted"
       >
-        <InitialsAvatar name={nombre} size="sm" className="size-10 text-sm" />
+        <InitialsAvatar name={nombre} size="sm" className="size-8 text-xs" />
         <span className="hidden max-w-[150px] text-left sm:block">
           <span className="block truncate text-sm font-semibold leading-tight">{nombre}</span>
           <span className="block text-xs text-muted-foreground">{rol}</span>
@@ -194,7 +196,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen w-full bg-canvas">
       {/* Desktop / tablet sidebar */}
-      <aside className="sticky top-0 hidden h-screen shrink-0 border-r border-sidebar-border bg-sidebar md:block md:w-[84px] xl:w-[248px]">
+      <aside className="sticky top-0 hidden h-screen shrink-0 border-r border-sidebar-border bg-sidebar md:block md:w-[72px] xl:w-[216px]">
         <div className="hidden h-full xl:block">
           <SidebarContent compact={false} />
         </div>
@@ -227,7 +229,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
         <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-          <div className="flex h-[72px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+          <div className="flex h-[58px] items-center gap-3 px-4 sm:px-5 lg:px-6">
             <button
               aria-label="Abrir menú"
               className="grid size-10 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-muted md:hidden"
@@ -236,7 +238,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Menu className="size-5" />
             </button>
 
-            <label className="relative flex h-11 min-w-0 flex-1 items-center rounded-xl border border-input bg-card px-3.5 text-muted-foreground transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-ring/30 sm:max-w-[520px]">
+            <label className="relative flex h-9 min-w-0 flex-1 items-center rounded-lg border border-input bg-card px-3 text-muted-foreground transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-ring/30 sm:max-w-[520px]">
               <Search className="size-[18px] shrink-0" />
               <input
                 type="search"
@@ -246,24 +248,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             </label>
 
             <div className="ml-auto flex items-center gap-2 sm:gap-4">
-              <button
-                aria-label="Notificaciones"
-                className="relative grid size-10 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary"
-              >
-                <Bell className="size-5" strokeWidth={1.75} />
-                <span className="absolute right-2 top-2 size-2 rounded-full bg-primary ring-2 ring-background" />
-              </button>
+              <CampanaNotificaciones />
               <UserMenu />
             </div>
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <div className="mx-auto w-full max-w-[1240px]">{children}</div>
+        <main className="flex-1 px-4 py-4 sm:px-5 lg:px-6 lg:py-5">
+          <div className="mx-auto w-full max-w-[1440px]">{children}</div>
         </main>
 
         <footer className="border-t border-border bg-background">
-          <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-3 px-4 py-4 text-[13px] text-muted-foreground sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-xs text-muted-foreground sm:px-5 lg:px-6">
             <div className="flex items-center gap-3">
               <span className="grid size-8 place-items-center rounded-full border border-border font-serif text-sm">
                 I

@@ -91,6 +91,12 @@ export type Payment = {
   id: string;
   patient_id: string | null;
   appointment_id: string | null;
+  /**
+   * A que cargo especifico abona este pago, si aplica. Con esto se puede
+   * saber cuanto le falta a UN cargo en concreto, no solo el saldo total
+   * del paciente. null = un pago suelto, no atado a un cargo puntual.
+   */
+  cargo_id: string | null;
   concept: string;
   method: PaymentMethod;
   amount: number;
@@ -106,9 +112,103 @@ export type OdontogramEntry = {
   surface: "completo" | "mesial" | "distal" | "oclusal" | "vestibular" | "lingual";
   condition: string;
   notes: string;
+  /**
+   * false = ya esta hecho (existente). true = todavia no se ha hecho,
+   * es lo que se planea hacerle (tratamiento planificado). Una misma
+   * cara puede tener a la vez una fila "existente" y otra "planificada",
+   * sin que una tape a la otra.
+   */
+  planned: boolean;
   appointment_id: string | null;
   created_by: string | null;
   created_at: string;
+};
+
+/**
+ * Un examen periodontal: la foto de como estaba la encia un dia.
+ * No se edita el anterior, se hace uno nuevo y se comparan.
+ */
+export type Periodontograma = {
+  id: string;
+  patient_id: string;
+  fecha: string;
+  notas: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+/**
+ * Un diente dentro de ese examen. Los arreglos SIEMPRE traen seis
+ * posiciones, en este orden fijo:
+ *   0=VM 1=VC 2=VD  (vestibular, el lado del labio)
+ *   3=LM 4=LC 5=LD  (lingual o palatino, el lado de la lengua)
+ * null en profundidad o margen = ese punto no se ha medido todavia,
+ * que es distinto de haberlo medido y que diera cero.
+ */
+export type PeriodontogramaDiente = {
+  periodontograma_id: string;
+  tooth: string;
+  profundidad: (number | null)[];
+  margen: (number | null)[];
+  sangrado: boolean[];
+  placa: boolean[];
+  supuracion: boolean[];
+  movilidad: number;
+  furca: number;
+  ausente: boolean;
+};
+
+/**
+ * Una entrada del historial de notas/procedimientos: la bitacora de que
+ * se le ha ido haciendo al paciente visita tras visita. Es aparte del
+ * campo "notes" de Patient, que es para lo que no cambia (alergias,
+ * antecedentes) y SI se sobrescribe cada vez que se guarda la ficha.
+ * Aqui cada nota es su propia fila, con fecha, y ninguna borra a la
+ * anterior.
+ */
+export type NotaClinica = {
+  id: string;
+  patient_id: string;
+  fecha: string;
+  nota: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+/**
+ * Un cargo: algo que el paciente ahora debe (un tratamiento que se le
+ * hizo, por ejemplo). Es lo opuesto de Payment (un cobro), que es
+ * cuando el paciente PAGA. Un cargo SUMA al saldo, un cobro RESTA.
+ * Cada cargo es su propia fila y queda como historial de lo que se le
+ * ha cobrado al paciente, no solo el numero final.
+ */
+export type Cargo = {
+  id: string;
+  patient_id: string;
+  appointment_id: string | null;
+  concepto: string;
+  monto: number;
+  fecha: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+/**
+ * Un producto del inventario de la clinica (guantes, anestesia,
+ * material de laboratorio...). El "vencimiento" es lo importante:
+ * es lo que deja avisar antes de que algo caduque sin que nadie se
+ * de cuenta.
+ */
+export type Producto = {
+  id: string;
+  nombre: string;
+  categoria: string;
+  cantidad: number;
+  unidad: string;
+  vencimiento: string | null;
+  notas: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ActivityItem = {
@@ -182,6 +282,37 @@ export type Database = {
         Row: ActivityItem;
         Insert: Partial<Insertable<ActivityItem>> & Pick<ActivityItem, "kind" | "title">;
         Update: Partial<ActivityItem>;
+        Relationships: [];
+      };
+      periodontogramas: {
+        Row: Periodontograma;
+        Insert: Partial<Insertable<Periodontograma>> & Pick<Periodontograma, "patient_id">;
+        Update: Partial<Periodontograma>;
+        Relationships: [];
+      };
+      periodontograma_dientes: {
+        Row: PeriodontogramaDiente;
+        Insert: Partial<PeriodontogramaDiente> &
+          Pick<PeriodontogramaDiente, "periodontograma_id" | "tooth">;
+        Update: Partial<PeriodontogramaDiente>;
+        Relationships: [];
+      };
+      notas_clinicas: {
+        Row: NotaClinica;
+        Insert: Partial<Insertable<NotaClinica>> & Pick<NotaClinica, "patient_id" | "nota">;
+        Update: Partial<NotaClinica>;
+        Relationships: [];
+      };
+      cargos: {
+        Row: Cargo;
+        Insert: Partial<Insertable<Cargo>> & Pick<Cargo, "patient_id" | "concepto" | "monto">;
+        Update: Partial<Cargo>;
+        Relationships: [];
+      };
+      productos: {
+        Row: Producto;
+        Insert: Partial<Insertable<Producto>> & Pick<Producto, "nombre">;
+        Update: Partial<Producto>;
         Relationships: [];
       };
     };

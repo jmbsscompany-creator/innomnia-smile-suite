@@ -1,9 +1,10 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
-import { ArrowRight, type LucideIcon } from "lucide-react";
+import { ArrowRight, MessageCircle, type LucideIcon } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
+import { enlaceWhatsApp } from "@/lib/whatsapp";
 import type { AppointmentStatus } from "@/lib/demo-data";
 import { statusLabel } from "@/lib/demo-data";
 
@@ -42,6 +43,106 @@ export function Button({
   return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }
 
+/* ---------- WhatsApp ----------
+
+   Casi todos los pacientes de una clinica de barrio se manejan por WhatsApp.
+   Hoy la secretaria copia el numero, abre WhatsApp y lo pega. Estos enlaces
+   se saltan esos tres pasos: un toque y el chat esta abierto.
+
+   Nota: no dibujamos el logo de WhatsApp, que es marca registrada. Usamos un
+   icono de mensaje y la palabra, que es lo que hace falta para que se
+   entienda a donde lleva el boton. */
+
+/**
+ * Boton verde que abre el chat. Si el telefono no sirve para armar el
+ * enlace, no se dibuja nada: mejor que no haya boton a que haya uno roto.
+ */
+export function BotonWhatsApp({
+  telefono,
+  mensaje,
+  etiqueta = "WhatsApp",
+  size = "md",
+  className,
+}: {
+  telefono: string | null | undefined;
+  /** Texto que aparece ya escrito en el chat. La persona puede editarlo. */
+  mensaje?: string | undefined;
+  /** Cadena vacia = solo el icono, cuadrado. Util en listas apretadas. */
+  etiqueta?: string | undefined;
+  size?: "sm" | "md" | undefined;
+  className?: string | undefined;
+}) {
+  const href = enlaceWhatsApp(telefono, mensaje);
+  if (!href) return null;
+
+  const soloIcono = etiqueta.trim() === "";
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Escribir a ${telefono} por WhatsApp`}
+      aria-label={soloIcono ? `Escribir a ${telefono} por WhatsApp` : undefined}
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl",
+        "bg-wa font-semibold text-primary-foreground transition-all duration-200",
+        "hover:-translate-y-px hover:bg-wa-hover",
+        "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "[&_svg]:size-4 [&_svg]:shrink-0",
+        size === "sm" ? "h-8 text-xs" : "h-10 text-sm",
+        soloIcono ? (size === "sm" ? "w-8" : "w-10") : size === "sm" ? "px-3" : "px-4",
+        className,
+      )}
+    >
+      <MessageCircle strokeWidth={2} />
+      {!soloIcono && etiqueta}
+    </a>
+  );
+}
+
+/**
+ * El numero escrito, pero que al tocarlo abre el chat. Para las filas de
+ * listas, donde un boton entero seria demasiado.
+ */
+export function TelefonoWhatsApp({
+  telefono,
+  mensaje,
+  className,
+}: {
+  telefono: string | null | undefined;
+  mensaje?: string | undefined;
+  className?: string | undefined;
+}) {
+  const href = enlaceWhatsApp(telefono, mensaje);
+
+  // Sin enlace posible: se muestra el numero tal cual, sin enganar.
+  if (!href) {
+    return telefono ? (
+      <span className={cn("inline-flex items-center gap-1.5", className)}>{telefono}</span>
+    ) : null;
+  }
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Escribir a ${telefono} por WhatsApp`}
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-lg px-1.5 py-0.5 -mx-1.5 font-medium",
+        "text-wa-soft-foreground transition-colors hover:bg-wa-soft",
+        className,
+      )}
+    >
+      <MessageCircle className="size-3.5 shrink-0" strokeWidth={2} />
+      {telefono}
+    </a>
+  );
+}
+
 /* ---------- Page header ---------- */
 
 export function PageHeader({
@@ -54,12 +155,12 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 rise-in">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 rise-in">
       <div className="min-w-0">
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-foreground sm:text-[32px]">
+        <h1 className="text-[21px] font-bold leading-tight tracking-tight text-foreground sm:text-[24px]">
           {title}
         </h1>
-        {subtitle && <p className="mt-1.5 text-[15px] text-muted-foreground">{subtitle}</p>}
+        {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
@@ -86,8 +187,8 @@ export function Section({
   return (
     <section className={cn("surface overflow-hidden", className)}>
       {title && (
-        <header className="flex items-center justify-between gap-3 px-5 pt-5 pb-3 sm:px-6">
-          <h2 className="text-[17px] font-semibold tracking-tight">{title}</h2>
+        <header className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-2 sm:px-5">
+          <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
           {link && (
             <Link
               to={link}
@@ -99,7 +200,7 @@ export function Section({
           )}
         </header>
       )}
-      <div className={cn(padded && "px-5 pb-5 sm:px-6")}>{children}</div>
+      <div className={cn(padded && "px-4 pb-4 sm:px-5")}>{children}</div>
     </section>
   );
 }
@@ -112,24 +213,43 @@ export function StatCard({
   value,
   hint,
   hintTone = "muted",
+  to,
+  search,
 }: {
   icon: LucideIcon;
   label: string;
   value: string;
   hint?: string;
   hintTone?: "muted" | "success" | "warning";
+  /** Si se pasa, la tarjeta entera lleva a esa pagina. */
+  to?: LinkProps["to"];
+  search?: LinkProps["search"];
 }) {
+  // Una tarjeta que lleva a algun lado tiene que parecerlo: cambia el cursor
+  // y se levanta un poco al pasar por encima.
+  const clase = cn(
+    "surface flex items-center gap-3 p-3.5",
+    to && "transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-soft",
+  );
+  const Caja = ({ children }: { children: ReactNode }) =>
+    to ? (
+      <Link to={to} {...(search ? { search } : {})} className={clase}>
+        {children}
+      </Link>
+    ) : (
+      <div className={clase}>{children}</div>
+    );
   return (
-    <div className="surface flex items-center gap-4 p-5">
+    <Caja>
       <div className="icon-tile shrink-0">
-        <Icon className="size-5" strokeWidth={1.75} />
+        <Icon className="size-4" strokeWidth={1.75} />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-sm text-muted-foreground">{label}</p>
+        <p className="truncate text-xs text-muted-foreground">{label}</p>
         <p
           className={cn(
             "mt-0.5 font-bold leading-none tracking-tight whitespace-nowrap",
-            value.length > 7 ? "text-[22px]" : "text-[26px]",
+            value.length > 7 ? "text-lg" : "text-[22px]",
           )}
         >
           {value}
@@ -147,7 +267,7 @@ export function StatCard({
           </p>
         )}
       </div>
-    </div>
+    </Caja>
   );
 }
 
@@ -161,7 +281,13 @@ const statusStyles: Record<AppointmentStatus, string> = {
   cancelada: "bg-danger-soft text-danger",
 };
 
-export function StatusBadge({ status, className }: { status: AppointmentStatus; className?: string }) {
+export function StatusBadge({
+  status,
+  className,
+}: {
+  status: AppointmentStatus;
+  className?: string;
+}) {
   return (
     <span
       className={cn(

@@ -25,7 +25,16 @@ import {
   type NuevoCobro,
 } from "@/lib/queries";
 import { formatDOP } from "@/lib/format";
-import { Button, InitialsAvatar, Pill, Section, StatCard, StatusBadge } from "@/components/app/ui";
+import {
+  BotonWhatsApp,
+  Button,
+  InitialsAvatar,
+  Pill,
+  Section,
+  StatCard,
+  StatusBadge,
+} from "@/components/app/ui";
+import { mensajeRecordatorio, mensajeSeguimiento } from "@/lib/whatsapp";
 import {
   Buscador,
   Field,
@@ -40,7 +49,7 @@ import { cn } from "@/lib/utils";
 
 const title = "Inicio — INNOMNIA Dental";
 const description =
-  "Resumen del dia: citas, confirmaciones pendientes, seguimiento de pacientes y cobros en RD$.";
+  "Resumen del día: citas, confirmaciones pendientes, seguimiento de pacientes y cobros en RD$.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -54,7 +63,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const DIAS = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 const MESES = [
   "enero",
   "febrero",
@@ -147,6 +156,10 @@ function Index() {
   const listaPacientes = pacientes.data ?? [];
   const listaCobros = cobros.data ?? [];
 
+  /** La cita guarda el id del paciente; aqui se recupera la persona. */
+  const pacientePorId = (id: string | null) =>
+    id ? (listaPacientes.find((p) => p.id === id) ?? null) : null;
+
   const porConfirmar = listaCitas.filter((c) => c.status === "pendiente");
   const seguimiento = listaPacientes.filter((p) => p.status === "seguimiento");
   const activos = listaPacientes.filter((p) => p.status === "activo");
@@ -157,8 +170,15 @@ function Index() {
   const fallo = pacientes.isError || citas.isError;
 
   /**
+   * Para los mensajes a pacientes SOLO vale el nombre de la clinica: si no
+   * esta puesto, es mejor no firmar que firmar con el nombre de quien entro
+   * ("le saludamos de johana" no lo entiende ningun paciente).
+   */
+  const nombreClinica = clinica.data?.name?.trim() ?? "";
+
+  /**
    * El sistema es de la clinica, no de una persona: saluda con el nombre
-   * de la clinica ("Buenos dias, Medent"). Si todavia no lo han puesto en
+   * de la clinica ("Buenos días, Medent"). Si todavia no lo han puesto en
    * Configuracion, cae al nombre de quien entro para no saludar en seco.
    */
   const nombre =
@@ -167,7 +187,7 @@ function Index() {
     (session?.user?.email?.split("@")[0] ?? "");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Hero */}
       <section className="surface rise-in relative overflow-hidden">
         <img
@@ -178,12 +198,12 @@ function Index() {
           className="absolute inset-y-0 right-0 h-full w-[70%] object-cover object-right opacity-90 sm:w-[60%] lg:w-[55%]"
         />
         <div className="hero-fade absolute inset-0" />
-        <div className="relative flex min-h-[176px] flex-col justify-center px-6 py-7 sm:px-8">
-          <h1 className="text-[30px] font-bold leading-tight tracking-tight sm:text-[36px]">
+        <div className="relative flex min-h-[112px] flex-col justify-center px-5 py-5 sm:px-6">
+          <h1 className="text-[22px] font-bold leading-tight tracking-tight sm:text-[26px]">
             {saludo(ahora)}
             {nombre ? `, ${nombre}` : ""}
           </h1>
-          <p className="mt-2 max-w-[48ch] text-[15px] text-muted-foreground sm:text-base">
+          <p className="mt-1 max-w-[52ch] text-sm text-muted-foreground">
             Hoy es {fechaLarga(ahora)}.{" "}
             {cargando ? (
               "Revisando tu agenda..."
@@ -217,13 +237,14 @@ function Index() {
           className="flex items-start gap-2 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger"
         >
           <TriangleAlert className="mt-px size-4 shrink-0" />
-          <span>No se pudieron cargar algunos datos. Revisa tu conexion y recarga la pagina.</span>
+          <span>No se pudieron cargar algunos datos. Revisa tu conexión y recarga la página.</span>
         </p>
       )}
 
       {/* Cifras: todas salen de la base */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
+          to="/citas"
           icon={CalendarDays}
           label="Citas de hoy"
           value={cargando ? "—" : String(listaCitas.length)}
@@ -232,12 +253,14 @@ function Index() {
           }
         />
         <StatCard
+          to="/pacientes"
           icon={Users}
           label="Pacientes totales"
           value={pacientes.isPending ? "—" : String(listaPacientes.length)}
-          hint={seguimiento.length > 0 ? `${seguimiento.length} en seguimiento` : "Al dia"}
+          hint={seguimiento.length > 0 ? `${seguimiento.length} en seguimiento` : "Al día"}
         />
         <StatCard
+          to="/pacientes"
           icon={DollarSign}
           label="Cobrado hoy"
           value={cobros.isPending ? "—" : formatDOP(cobradoHoy)}
@@ -245,6 +268,7 @@ function Index() {
           {...(porCobrar === 0 ? { hintTone: "success" as const } : {})}
         />
         <StatCard
+          to="/pacientes"
           icon={CircleCheck}
           label="Pacientes activos"
           value={pacientes.isPending ? "—" : String(activos.length)}
@@ -252,7 +276,7 @@ function Index() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         {/* Agenda */}
         <Section title="Agenda de hoy" link="/citas" linkLabel="Ver agenda completa">
           {citas.isPending ? (
@@ -266,9 +290,9 @@ function Index() {
               <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-primary-soft text-primary">
                 <CalendarDays className="size-6" strokeWidth={1.6} />
               </span>
-              <p className="mt-3 font-semibold">La agenda de hoy esta vacia</p>
+              <p className="mt-3 font-semibold">La agenda de hoy está vacía</p>
               <p className="mx-auto mt-1 max-w-[40ch] text-sm text-muted-foreground">
-                Buen momento para llamar a los pacientes que estan en seguimiento.
+                Buen momento para llamar a los pacientes que están en seguimiento.
               </p>
             </div>
           ) : (
@@ -279,7 +303,7 @@ function Index() {
                   <li
                     key={a.id}
                     className={cn(
-                      "grid grid-cols-[52px_20px_minmax(0,1fr)_auto] items-center gap-x-2 py-3.5 sm:gap-x-3",
+                      "grid grid-cols-[52px_20px_minmax(0,1fr)_auto] items-center gap-x-2 py-2.5 sm:gap-x-3",
                       i !== listaCitas.length - 1 && "border-b border-border",
                     )}
                   >
@@ -301,15 +325,42 @@ function Index() {
                     </span>
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold">
-                          {a.treatment || "Cita"}
-                        </p>
+                        {/* Primero QUIEN viene: es lo que se busca de un vistazo.
+                            El nombre lleva a la ficha del paciente. */}
+                        {a.patient_id ? (
+                          <Link
+                            to="/pacientes/$id"
+                            params={{ id: a.patient_id }}
+                            className="block truncate text-[15px] font-semibold transition-colors hover:text-primary"
+                          >
+                            {pacientePorId(a.patient_id)?.name ?? "Sin paciente asignado"}
+                          </Link>
+                        ) : (
+                          <p className="truncate text-[15px] font-semibold">
+                            {pacientePorId(a.patient_id)?.name ?? "Sin paciente asignado"}
+                          </p>
+                        )}
                         <p className="truncate text-sm text-muted-foreground">
-                          {a.dentist || "Sin odontologo asignado"}
+                          {[a.treatment, a.dentist].filter(Boolean).join(" · ") || "Sin detalle"}
                         </p>
                       </div>
                     </div>
-                    <StatusBadge status={a.status} />
+                    <div className="flex items-center gap-2">
+                      {(a.status === "confirmada" || a.status === "pendiente") && (
+                        <BotonWhatsApp
+                          telefono={pacientePorId(a.patient_id)?.phone}
+                          size="sm"
+                          etiqueta=""
+                          mensaje={mensajeRecordatorio(
+                            pacientePorId(a.patient_id)?.name ?? "",
+                            nombreClinica,
+                            "hoy",
+                            a.time.slice(0, 5),
+                          )}
+                        />
+                      )}
+                      <StatusBadge status={a.status} />
+                    </div>
                   </li>
                 );
               })}
@@ -320,7 +371,7 @@ function Index() {
           </Button>
         </Section>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Seguimiento */}
           <Section title="Pacientes que necesitan seguimiento" link="/pacientes">
             {pacientes.isPending ? (
@@ -338,7 +389,7 @@ function Index() {
                 {seguimiento.slice(0, 5).map((p) => (
                   <li
                     key={p.id}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <InitialsAvatar name={p.name} />
@@ -349,7 +400,15 @@ function Index() {
                         </p>
                       </div>
                     </div>
-                    {p.balance > 0 && <Pill tone="warning">{formatDOP(p.balance)}</Pill>}
+                    <div className="flex items-center gap-2">
+                      {p.balance > 0 && <Pill tone="warning">{formatDOP(p.balance)}</Pill>}
+                      <BotonWhatsApp
+                        telefono={p.phone}
+                        size="sm"
+                        etiqueta=""
+                        mensaje={mensajeSeguimiento(p.name, nombreClinica)}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -361,7 +420,7 @@ function Index() {
             <div className="flex items-end justify-between gap-4 rounded-xl bg-primary-soft/60 p-4">
               <div>
                 <p className="text-sm text-primary-soft-foreground">Total cobrado</p>
-                <p className="mt-1 text-[30px] font-bold leading-none tracking-tight text-primary-soft-foreground">
+                <p className="mt-1 text-[24px] font-bold leading-none tracking-tight text-primary-soft-foreground">
                   {cobros.isPending ? "—" : formatDOP(cobradoHoy)}
                 </p>
               </div>
@@ -374,7 +433,7 @@ function Index() {
             </div>
             {!cobros.isPending && listaCobros.length === 0 ? (
               <p className="py-5 text-center text-sm text-muted-foreground">
-                Todavia no se ha registrado ningun cobro hoy.
+                Todavía no se ha registrado ningún cobro hoy.
               </p>
             ) : (
               <ul className="mt-2 divide-y divide-border">
@@ -422,7 +481,7 @@ function Index() {
           </ul>
         ) : (actividad.data?.length ?? 0) === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            Aqui va a aparecer lo que pase en la clinica: citas agendadas, pagos y pacientes nuevos.
+            Aquí va a aparecer lo que pase en la clínica: citas agendadas, pagos y pacientes nuevos.
           </p>
         ) : (
           <ul className="divide-y divide-border">
@@ -432,13 +491,15 @@ function Index() {
                   ? CalendarDays
                   : r.kind === "pago"
                     ? DollarSign
-                    : r.kind === "tratamiento"
-                      ? FileText
-                      : Users;
+                    : r.kind === "cargo"
+                      ? Wallet
+                      : r.kind === "tratamiento"
+                        ? FileText
+                        : Users;
               return (
                 <li
                   key={r.id}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="icon-tile size-10 shrink-0">
@@ -457,18 +518,18 @@ function Index() {
       </Section>
 
       {/* Accesos rapidos */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         {[
           {
             icon: CalendarPlus,
             title: "Agenda una cita",
-            sub: "Organiza el dia de la clinica",
+            sub: "Organiza el día de la clínica",
             to: "/citas" as const,
           },
           {
             icon: UserPlus,
             title: "Registra un paciente",
-            sub: "Su expediente empieza aqui",
+            sub: "Su expediente empieza aquí",
             to: "/pacientes" as const,
           },
           {
@@ -499,7 +560,7 @@ function Index() {
         open={cobroAbierto}
         onClose={cerrarCobro}
         title="Registrar cobro"
-        description="Esto anota que el paciente pago. No procesa tarjetas ni mueve dinero."
+        description="Esto anota que el paciente pagó. No procesa tarjetas ni mueve dinero."
         footer={
           <ModalActions
             onCancel={cerrarCobro}
@@ -515,7 +576,7 @@ function Index() {
               value={formCobro.patient_id}
               onChange={(id) => cambiarCobro("patient_id", id)}
               placeholder="Escribe el nombre del paciente..."
-              vacioTexto="Ningun paciente con ese nombre"
+              vacioTexto="Ningún paciente con ese nombre"
               required
               options={listaPacientes.map((p) => ({
                 id: p.id,
@@ -529,8 +590,8 @@ function Index() {
             <Field label="Monto en RD$">
               <TextInput
                 type="number"
-                min={1}
-                step={100}
+                min={0}
+                step={1}
                 value={String(formCobro.amount)}
                 onChange={(e) => cambiarCobro("amount", Number(e.target.value))}
                 required
@@ -549,7 +610,7 @@ function Index() {
             </Field>
           </FormGrid>
 
-          <Field label="Concepto" hint="Por que esta pagando.">
+          <Field label="Concepto" hint="Por qué está pagando.">
             <TextInput
               value={formCobro.concept}
               onChange={(e) => cambiarCobro("concept", e.target.value)}
@@ -561,7 +622,7 @@ function Index() {
             <TextArea
               value={formCobro.notes}
               onChange={(e) => cambiarCobro("notes", e.target.value)}
-              placeholder="Abono parcial, numero de recibo, etc."
+              placeholder="Abono parcial, número de recibo, etc."
             />
           </Field>
 

@@ -14,13 +14,22 @@ import type { Appointment } from "@/lib/database.types";
 import {
   useCambiarEstadoCita,
   useCitasDeRango,
+  useClinica,
   useCrearCita,
   useCrearDoctor,
   useDoctores,
   usePacientes,
   type NuevaCita,
 } from "@/lib/queries";
-import { Button, InitialsAvatar, PageHeader, Section, StatusBadge } from "@/components/app/ui";
+import {
+  BotonWhatsApp,
+  Button,
+  InitialsAvatar,
+  PageHeader,
+  Section,
+  StatusBadge,
+} from "@/components/app/ui";
+import { mensajeRecordatorio } from "@/lib/whatsapp";
 import {
   Buscador,
   Field,
@@ -34,7 +43,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const title = "Agenda de citas — INNOMNIA Dental";
-const description = "Calendario semanal y lista de citas de la clinica.";
+const description = "Calendario semanal y lista de citas de la clínica.";
 
 export const Route = createFileRoute("/citas")({
   head: () => ({
@@ -48,8 +57,8 @@ export const Route = createFileRoute("/citas")({
   component: AppointmentsPage,
 });
 
-const DOW_CORTO = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"];
-const DOW_LARGO = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
+const DOW_CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const DOW_LARGO = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 const MESES = [
   "enero",
   "febrero",
@@ -116,7 +125,7 @@ const FORM_VACIO: Omit<NuevaCita, "date"> = {
 
 function AppointmentsPage() {
   const [semana, setSemana] = useState(0);
-  const [vista, setVista] = useState<"dia" | "semana">("dia");
+  const [vista, setVista] = useState<"día" | "semana">("día");
   const [seleccionado, setSeleccionado] = useState(() => aISO(new Date()));
   const [abierto, setAbierto] = useState(false);
   const [form, setForm] = useState(FORM_VACIO);
@@ -133,6 +142,9 @@ function AppointmentsPage() {
   const crear = useCrearCita();
   const crearDoctor = useCrearDoctor();
   const cambiarEstado = useCambiarEstadoCita();
+
+  const clinica = useClinica();
+  const nombreClinica = clinica.data?.name?.trim() ?? "";
 
   const todas = citas.data ?? [];
   const delDia = useMemo(
@@ -151,6 +163,11 @@ function AppointmentsPage() {
   function nombrePaciente(id: string | null) {
     if (!id) return "Sin paciente asignado";
     return pacientes.data?.find((p) => p.id === id)?.name ?? "Paciente";
+  }
+
+  function telefonoPaciente(id: string | null) {
+    if (!id) return null;
+    return pacientes.data?.find((p) => p.id === id)?.phone ?? null;
   }
 
   /** Prefiere el doctor de la lista; si no, el nombre suelto que se escribio. */
@@ -195,14 +212,14 @@ function AppointmentsPage() {
   const rangoTexto = `${dias[0]!.getDate()} al ${dias[6]!.getDate()} de ${MESES[dias[6]!.getMonth()]} de ${dias[6]!.getFullYear()}`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Agenda"
         subtitle={`Semana del ${rangoTexto}`}
         actions={
           <>
             <div className="hidden rounded-xl border border-border-strong bg-card p-1 sm:flex">
-              {(["dia", "semana"] as const).map((v) => (
+              {(["día", "semana"] as const).map((v) => (
                 <button
                   key={v}
                   onClick={() => setVista(v)}
@@ -213,7 +230,7 @@ function AppointmentsPage() {
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {v === "dia" ? "Dia" : "Semana"}
+                  {v === "día" ? "Día" : "Semana"}
                 </button>
               ))}
             </div>
@@ -245,7 +262,7 @@ function AppointmentsPage() {
                 key={iso}
                 onClick={() => {
                   setSeleccionado(iso);
-                  setVista("dia");
+                  setVista("día");
                 }}
                 className={cn(
                   "flex flex-col items-center rounded-xl py-2.5 transition-colors",
@@ -349,7 +366,7 @@ function AppointmentsPage() {
                             key={c.id}
                             onClick={() => {
                               setSeleccionado(iso);
-                              setVista("dia");
+                              setVista("día");
                             }}
                             className={cn(
                               "block w-full truncate rounded-md border-l-2 px-2 py-1 text-left text-xs font-medium",
@@ -374,7 +391,7 @@ function AppointmentsPage() {
           </div>
         </Section>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
           <Section
             title={`${nombreDia.charAt(0).toUpperCase()}${nombreDia.slice(1)} ${fechaSel.getDate()} de ${MESES[fechaSel.getMonth()]}`}
           >
@@ -389,9 +406,9 @@ function AppointmentsPage() {
                 <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-primary-soft text-primary">
                   <CalendarDays className="size-6" strokeWidth={1.6} />
                 </span>
-                <p className="mt-3 font-semibold">Sin citas este dia</p>
+                <p className="mt-3 font-semibold">Sin citas este día</p>
                 <p className="mx-auto mt-1 max-w-[40ch] text-sm text-muted-foreground">
-                  Agenda la primera desde el boton de arriba.
+                  Agenda la primera desde el botón de arriba.
                 </p>
               </div>
             ) : (
@@ -411,9 +428,22 @@ function AppointmentsPage() {
                         className="hidden sm:grid"
                       />
                       <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold">
-                          {nombrePaciente(c.patient_id)}
-                        </p>
+                        {/* El nombre lleva a la ficha: desde la agenda se ve
+                            quien viene y de un clic se abre su historia, sin
+                            tener que ir a buscarlo a mano. */}
+                        {c.patient_id ? (
+                          <Link
+                            to="/pacientes/$id"
+                            params={{ id: c.patient_id }}
+                            className="block truncate text-[15px] font-semibold transition-colors hover:text-primary"
+                          >
+                            {nombrePaciente(c.patient_id)}
+                          </Link>
+                        ) : (
+                          <p className="truncate text-[15px] font-semibold">
+                            {nombrePaciente(c.patient_id)}
+                          </p>
+                        )}
                         <p className="truncate text-sm text-muted-foreground">
                           {[c.treatment, nombreDoctor(c)].filter(Boolean).join(" · ") ||
                             "Sin detalle"}
@@ -431,6 +461,22 @@ function AppointmentsPage() {
                           <Check /> <span className="hidden sm:inline">Confirmar</span>
                         </Button>
                       )}
+                      {/* Recordatorio por WhatsApp, con el texto ya escrito.
+                          Solo si la cita sigue en pie: recordar una cancelada
+                          o una que ya paso no tiene sentido. */}
+                      {(c.status === "confirmada" || c.status === "pendiente") && (
+                        <BotonWhatsApp
+                          telefono={telefonoPaciente(c.patient_id)}
+                          size="sm"
+                          etiqueta=""
+                          mensaje={mensajeRecordatorio(
+                            nombrePaciente(c.patient_id),
+                            nombreClinica,
+                            `${fechaSel.getDate()} de ${MESES[fechaSel.getMonth()]}`,
+                            c.time.slice(0, 5),
+                          )}
+                        />
+                      )}
                       <StatusBadge status={c.status} />
                     </div>
                   </li>
@@ -439,8 +485,8 @@ function AppointmentsPage() {
             )}
           </Section>
 
-          <div className="space-y-6">
-            <Section title="Resumen del dia">
+          <div className="space-y-4">
+            <Section title="Resumen del día">
               <dl className="grid grid-cols-2 gap-4">
                 <div className="rounded-xl bg-primary-soft/60 p-4">
                   <dt className="text-sm text-muted-foreground">Citas</dt>
@@ -530,7 +576,7 @@ function AppointmentsPage() {
             </span>
             <p className="mt-3 font-semibold">Primero necesitas un paciente</p>
             <p className="mx-auto mt-1 max-w-[40ch] text-sm text-muted-foreground">
-              Una cita se le agenda a alguien. Registra al paciente y vuelve aqui.
+              Una cita se le agenda a alguien. Registra al paciente y vuelve aquí.
             </p>
             <Link to="/pacientes" onClick={cerrarModal}>
               <Button className="mt-4">
@@ -545,7 +591,7 @@ function AppointmentsPage() {
                 value={form.patient_id}
                 onChange={(id) => cambiar("patient_id", id)}
                 placeholder="Escribe el nombre del paciente..."
-                vacioTexto="Ningun paciente con ese nombre"
+                vacioTexto="Ningún paciente con ese nombre"
                 required
                 options={(pacientes.data ?? []).map((p) => ({
                   id: p.id,
@@ -564,7 +610,7 @@ function AppointmentsPage() {
                   required
                 />
               </Field>
-              <Field label="Duracion" hint="En minutos.">
+              <Field label="Duración" hint="En minutos.">
                 <SelectInput
                   value={String(form.duration)}
                   onChange={(e) => cambiar("duration", Number(e.target.value))}
@@ -586,12 +632,12 @@ function AppointmentsPage() {
                   placeholder="Limpieza dental"
                 />
               </Field>
-              <Field label="Odontologo" hint="Si no esta en la lista, escribelo y lo agregas.">
+              <Field label="Odontólogo" hint="Si no está en la lista, escríbelo y lo agregas.">
                 <Buscador
                   value={form.dentist_id}
                   onChange={(id) => cambiar("dentist_id", id)}
                   placeholder="Busca o escribe un doctor..."
-                  vacioTexto="Ningun doctor con ese nombre"
+                  vacioTexto="Ningún doctor con ese nombre"
                   onCrear={agregarDoctor}
                   crearTexto="Agregar doctor"
                   options={(doctores.data ?? [])
