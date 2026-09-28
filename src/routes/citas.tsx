@@ -145,6 +145,11 @@ function AppointmentsPage() {
   // el historial del paciente, para poder darle seguimiento despues.
   const [marcandoNoAsistio, setMarcandoNoAsistio] = useState<string | null>(null);
   const [motivoNoAsistio, setMotivoNoAsistio] = useState("");
+  // Ver el detalle de una cita: la lista solo muestra lo basico, y al
+  // hacer clic se abre esto con todo (y ahi mismo, los botones para
+  // confirmar, cancelar, etc. — bien explicados, no iconos sueltos).
+  const [detalleId, setDetalleId] = useState<string | null>(null);
+  const [confirmarCancelar, setConfirmarCancelar] = useState<string | null>(null);
 
   const lunes = useMemo(() => lunesDe(semana), [semana]);
   const dias = useMemo(() => Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i)), [lunes]);
@@ -173,6 +178,7 @@ function AppointmentsPage() {
         .sort((a, b) => minutos(a.time) - minutos(b.time)),
     [todas, seleccionado],
   );
+  const citaDetalle = todas.find((c) => c.id === detalleId) ?? null;
 
   const totalMin = delDia.reduce((s, c) => s + c.duration, 0);
   const fechaSel = new Date(`${seleccionado}T00:00:00`);
@@ -271,6 +277,30 @@ function AppointmentsPage() {
   async function confirmarYBorrar(id: string) {
     await eliminar.mutateAsync(id);
     setConfirmarBorrar(null);
+    setDetalleId(null);
+  }
+
+  function abrirDetalle(id: string) {
+    setDetalleId(id);
+    setConfirmarCancelar(null);
+    setConfirmarBorrar(null);
+    cerrarNoAsistio();
+  }
+
+  function cerrarDetalle() {
+    setDetalleId(null);
+    setConfirmarCancelar(null);
+    cerrarNoAsistio();
+  }
+
+  function confirmarCita(c: Appointment) {
+    cambiarEstado.mutate({ id: c.id, status: "confirmada" });
+    cerrarDetalle();
+  }
+
+  function confirmarCancelarCita(c: Appointment) {
+    cambiarEstado.mutate({ id: c.id, status: "cancelada" });
+    cerrarDetalle();
   }
 
   /** Ya paso el dia de esa cita y sigue sin resolverse (ni confirmada ni cancelada a tiempo). */
@@ -280,6 +310,7 @@ function AppointmentsPage() {
 
   function marcarSiAsistio(c: Appointment) {
     cambiarEstado.mutate({ id: c.id, status: "completada" });
+    cerrarDetalle();
   }
 
   function abrirNoAsistio(id: string) {
@@ -316,7 +347,7 @@ function AppointmentsPage() {
           nota: `No asistió a la cita del ${formatShortDate(c.date)} a las ${c.time.slice(0, 5)}.${detalle}`,
         });
       }
-      cerrarNoAsistio();
+      cerrarDetalle();
     } catch {
       // El error se muestra junto al aviso.
     }
@@ -529,194 +560,46 @@ function AppointmentsPage() {
             ) : (
               <ol className="divide-y divide-border">
                 {delDia.map((c) => (
-                  <li
-                    key={c.id}
-                    className="grid grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 py-4 sm:grid-cols-[72px_minmax(0,1fr)_auto]"
-                  >
-                    <div>
-                      <p className="text-[15px] font-semibold tabular-nums">{c.time.slice(0, 5)}</p>
-                      <p className="text-xs text-muted-foreground">{c.duration} min</p>
-                    </div>
-                    <div className="flex min-w-0 items-center gap-3 border-l border-border-strong pl-4">
-                      <InitialsAvatar
-                        name={nombrePaciente(c.patient_id)}
-                        className="hidden sm:grid"
-                      />
-                      <div className="min-w-0">
-                        {/* El nombre lleva a la ficha: desde la agenda se ve
-                            quien viene y de un clic se abre su historia, sin
-                            tener que ir a buscarlo a mano. */}
-                        {c.patient_id ? (
-                          <Link
-                            to="/pacientes/$id"
-                            params={{ id: c.patient_id }}
-                            className="block truncate text-[15px] font-semibold transition-colors hover:text-primary"
-                          >
-                            {nombrePaciente(c.patient_id)}
-                          </Link>
-                        ) : (
+                  <li key={c.id}>
+                    {/* Toda la fila se puede tocar: abre el detalle de la
+                        cita, con todo bien explicado (nada de iconos sueltos
+                        sin decir que hacen). */}
+                    <button
+                      type="button"
+                      onClick={() => abrirDetalle(c.id)}
+                      className="grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg py-4 text-left transition-colors hover:bg-primary-soft/40 sm:grid-cols-[72px_minmax(0,1fr)_auto]"
+                    >
+                      <div>
+                        <p className="text-[15px] font-semibold tabular-nums">
+                          {c.time.slice(0, 5)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{c.duration} min</p>
+                      </div>
+                      <div className="flex min-w-0 items-center gap-3 border-l border-border-strong pl-4">
+                        <InitialsAvatar
+                          name={nombrePaciente(c.patient_id)}
+                          className="hidden sm:grid"
+                        />
+                        <div className="min-w-0">
                           <p className="truncate text-[15px] font-semibold">
                             {nombrePaciente(c.patient_id)}
                           </p>
-                        )}
-                        <p className="truncate text-sm text-muted-foreground">
-                          {[c.treatment, nombreDoctor(c)].filter(Boolean).join(" · ") ||
-                            "Sin detalle"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-end gap-1.5">
-                      {yaPaso(c) && (c.status === "pendiente" || c.status === "confirmada") ? (
-                        // Ya paso el dia y nadie dijo que paso: en vez de
-                        // dejarla pegada en "Pendiente", se pregunta derecho.
-                        <>
-                          <span className="text-xs font-medium text-muted-foreground">
-                            ¿Asistió?
-                          </span>
-                          <Button
-                            variant="soft"
-                            size="sm"
-                            disabled={cambiarEstado.isPending}
-                            onClick={() => marcarSiAsistio(c)}
-                          >
-                            <Check /> Sí
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={actualizar.isPending}
-                            onClick={() => abrirNoAsistio(c.id)}
-                          >
-                            <X /> No
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          {c.status === "pendiente" && (
-                            <Button
-                              variant="soft"
-                              size="sm"
-                              disabled={cambiarEstado.isPending}
-                              onClick={() =>
-                                cambiarEstado.mutate({ id: c.id, status: "confirmada" })
-                              }
-                            >
-                              <Check /> <span className="hidden sm:inline">Confirmar</span>
-                            </Button>
-                          )}
-                          {/* Recordatorio por WhatsApp, con el texto ya escrito.
-                              Solo si la cita sigue en pie: recordar una cancelada
-                              o una que ya paso no tiene sentido. */}
-                          {(c.status === "confirmada" || c.status === "pendiente") && (
-                            <BotonWhatsApp
-                              telefono={telefonoPaciente(c.patient_id)}
-                              size="sm"
-                              etiqueta=""
-                              mensaje={mensajeRecordatorio(
-                                nombrePaciente(c.patient_id),
-                                nombreClinica,
-                                `${fechaSel.getDate()} de ${MESES[fechaSel.getMonth()]}`,
-                                c.time.slice(0, 5),
-                              )}
-                            />
-                          )}
-                          {/* No vino: seguimiento por WhatsApp para saber que
-                              paso y, si quiere, reagendarle. */}
-                          {c.status === "no_asistio" && (
-                            <BotonWhatsApp
-                              telefono={telefonoPaciente(c.patient_id)}
-                              size="sm"
-                              etiqueta=""
-                              mensaje={mensajeNoAsistio(
-                                nombrePaciente(c.patient_id),
-                                nombreClinica,
-                                `${fechaSel.getDate()} de ${MESES[fechaSel.getMonth()]}`,
-                                c.time.slice(0, 5),
-                              )}
-                            />
-                          )}
-                          <StatusBadge status={c.status} />
-                          {(c.status === "confirmada" || c.status === "pendiente") && (
-                            <button
-                              onClick={() =>
-                                cambiarEstado.mutate({ id: c.id, status: "cancelada" })
-                              }
-                              disabled={cambiarEstado.isPending}
-                              aria-label="Cancelar cita"
-                              title="Cancelar cita"
-                              className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-warning-soft hover:text-warning"
-                            >
-                              <X className="size-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => abrirEditar(c)}
-                            aria-label="Editar o reagendar cita"
-                            title="Editar / reagendar"
-                            className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary"
-                          >
-                            <Pencil className="size-4" />
-                          </button>
-                          {confirmarBorrar === c.id ? (
-                            <div className="flex shrink-0 items-center gap-1.5 rounded-lg bg-danger-soft px-2 py-1">
-                              <span className="text-xs font-medium text-danger">¿Borrar?</span>
-                              <button
-                                onClick={() => void confirmarYBorrar(c.id)}
-                                disabled={eliminar.isPending}
-                                className="rounded-md bg-danger px-2 py-1 text-xs font-semibold text-white"
-                              >
-                                Sí
-                              </button>
-                              <button
-                                onClick={() => setConfirmarBorrar(null)}
-                                className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted"
-                              >
-                                No
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => pedirBorrar(c.id)}
-                              aria-label="Eliminar cita"
-                              title="Eliminar"
-                              className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-danger-soft hover:text-danger"
-                            >
-                              <Trash2 className="size-4" />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                    {/* Formulario chiquito para el motivo, justo debajo de esa cita. */}
-                    {marcandoNoAsistio === c.id && (
-                      <div className="col-span-full mt-1 flex flex-col gap-2 rounded-xl bg-muted/60 p-3 sm:flex-row sm:items-center">
-                        <TextInput
-                          value={motivoNoAsistio}
-                          onChange={(e) => setMotivoNoAsistio(e.target.value)}
-                          placeholder="¿Por qué no vino? (opcional)"
-                          autoFocus
-                          className="flex-1"
-                        />
-                        <div className="flex shrink-0 gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={actualizar.isPending}
-                            onClick={() => void confirmarNoAsistio(c)}
-                          >
-                            {actualizar.isPending ? "Guardando..." : "Guardar"}
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={cerrarNoAsistio}>
-                            Cancelar
-                          </Button>
+                          <p className="truncate text-sm text-muted-foreground">
+                            {[c.treatment, nombreDoctor(c)].filter(Boolean).join(" · ") ||
+                              "Sin detalle"}
+                          </p>
                         </div>
                       </div>
-                    )}
-                    {marcandoNoAsistio === c.id && actualizar.isError && (
-                      <p role="alert" className="col-span-full mt-1 text-sm text-danger">
-                        {actualizar.error.message}
-                      </p>
-                    )}
+                      <div className="flex shrink-0 items-center gap-2">
+                        {yaPaso(c) && (c.status === "pendiente" || c.status === "confirmada") && (
+                          <span className="hidden text-xs font-medium text-warning sm:inline">
+                            ¿Asistió?
+                          </span>
+                        )}
+                        <StatusBadge status={c.status} />
+                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                      </div>
+                    </button>
                   </li>
                 ))}
               </ol>
@@ -1051,6 +934,230 @@ function AppointmentsPage() {
             </p>
           )}
         </form>
+      </Modal>
+
+      {/* Detalle de una cita: se abre al tocar la fila en la lista del dia.
+          Aqui van todas las acciones, cada una explicada con su nombre —
+          nada de iconos sueltos sin decir que hacen. */}
+      <Modal open={citaDetalle !== null} onClose={cerrarDetalle} title="Detalle de la cita">
+        {citaDetalle && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-lg font-semibold">{nombrePaciente(citaDetalle.patient_id)}</p>
+              {citaDetalle.patient_id && (
+                <Link
+                  to="/pacientes/$id"
+                  params={{ id: citaDetalle.patient_id }}
+                  onClick={cerrarDetalle}
+                  className="text-sm font-medium text-primary transition-colors hover:text-primary-hover"
+                >
+                  Ver ficha del paciente
+                </Link>
+              )}
+            </div>
+
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-muted/50 p-4 text-sm">
+              <div>
+                <dt className="text-muted-foreground">Fecha</dt>
+                <dd className="font-medium">{formatShortDate(citaDetalle.date)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Hora</dt>
+                <dd className="font-medium">
+                  {citaDetalle.time.slice(0, 5)} · {citaDetalle.duration} min
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Tratamiento</dt>
+                <dd className="font-medium">{citaDetalle.treatment || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Odontólogo</dt>
+                <dd className="font-medium">{nombreDoctor(citaDetalle) || "—"}</dd>
+              </div>
+              {citaDetalle.notes && (
+                <div className="col-span-2">
+                  <dt className="text-muted-foreground">Notas</dt>
+                  <dd className="font-medium">{citaDetalle.notes}</dd>
+                </div>
+              )}
+            </dl>
+
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Estado actual:</span>
+              <StatusBadge status={citaDetalle.status} />
+            </div>
+
+            {/* Acciones, segun en que quedo la cita */}
+            <div className="flex flex-col gap-3 border-t border-border pt-4">
+              {yaPaso(citaDetalle) &&
+              (citaDetalle.status === "pendiente" || citaDetalle.status === "confirmada") ? (
+                marcandoNoAsistio === citaDetalle.id ? (
+                  <div className="flex flex-col gap-2 rounded-xl bg-muted/60 p-3">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      ¿Por qué no vino? (opcional)
+                    </label>
+                    <TextInput
+                      value={motivoNoAsistio}
+                      onChange={(e) => setMotivoNoAsistio(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={actualizar.isPending}
+                        onClick={() => void confirmarNoAsistio(citaDetalle)}
+                      >
+                        {actualizar.isPending ? "Guardando..." : "Guardar"}
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={cerrarNoAsistio}>
+                        Cancelar
+                      </Button>
+                    </div>
+                    {actualizar.isError && (
+                      <p role="alert" className="text-sm text-danger">
+                        {actualizar.error.message}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-medium">
+                      Ya pasó el día de esta cita — ¿el paciente asistió?
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={cambiarEstado.isPending}
+                        onClick={() => marcarSiAsistio(citaDetalle)}
+                      >
+                        <Check /> Sí asistió
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => abrirNoAsistio(citaDetalle.id)}
+                      >
+                        <X /> No asistió
+                      </Button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <>
+                  {citaDetalle.status === "pendiente" && (
+                    <Button
+                      size="sm"
+                      className="self-start"
+                      disabled={cambiarEstado.isPending}
+                      onClick={() => confirmarCita(citaDetalle)}
+                    >
+                      <Check /> Confirmar cita
+                    </Button>
+                  )}
+                  {(citaDetalle.status === "confirmada" || citaDetalle.status === "pendiente") && (
+                    <BotonWhatsApp
+                      telefono={telefonoPaciente(citaDetalle.patient_id)}
+                      etiqueta="Enviar recordatorio por WhatsApp"
+                      mensaje={mensajeRecordatorio(
+                        nombrePaciente(citaDetalle.patient_id),
+                        nombreClinica,
+                        formatShortDate(citaDetalle.date),
+                        citaDetalle.time.slice(0, 5),
+                      )}
+                    />
+                  )}
+                  {citaDetalle.status === "no_asistio" && (
+                    <BotonWhatsApp
+                      telefono={telefonoPaciente(citaDetalle.patient_id)}
+                      etiqueta="Escribirle por WhatsApp"
+                      mensaje={mensajeNoAsistio(
+                        nombrePaciente(citaDetalle.patient_id),
+                        nombreClinica,
+                        formatShortDate(citaDetalle.date),
+                        citaDetalle.time.slice(0, 5),
+                      )}
+                    />
+                  )}
+                  {(citaDetalle.status === "confirmada" || citaDetalle.status === "pendiente") &&
+                    (confirmarCancelar === citaDetalle.id ? (
+                      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-warning-soft px-3 py-2">
+                        <span className="text-sm font-medium text-warning">
+                          ¿Seguro que quieres cancelar esta cita?
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => confirmarCancelarCita(citaDetalle)}
+                        >
+                          Sí, cancelar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setConfirmarCancelar(null)}
+                        >
+                          No
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="self-start"
+                        onClick={() => setConfirmarCancelar(citaDetalle.id)}
+                      >
+                        <X /> Cancelar cita
+                      </Button>
+                    ))}
+                </>
+              )}
+
+              <div className="mt-1 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    cerrarDetalle();
+                    abrirEditar(citaDetalle);
+                  }}
+                >
+                  <Pencil /> Editar / reagendar
+                </Button>
+                {confirmarBorrar === citaDetalle.id ? (
+                  <div className="flex items-center gap-1.5 rounded-lg bg-danger-soft px-2 py-1">
+                    <span className="text-xs font-medium text-danger">
+                      ¿Eliminar esta cita del todo?
+                    </span>
+                    <button
+                      onClick={() => void confirmarYBorrar(citaDetalle.id)}
+                      disabled={eliminar.isPending}
+                      className="rounded-md bg-danger px-2 py-1 text-xs font-semibold text-white"
+                    >
+                      Sí, eliminar
+                    </button>
+                    <button
+                      onClick={() => setConfirmarBorrar(null)}
+                      className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-danger hover:bg-danger-soft"
+                    onClick={() => pedirBorrar(citaDetalle.id)}
+                  >
+                    <Trash2 /> Eliminar cita
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
