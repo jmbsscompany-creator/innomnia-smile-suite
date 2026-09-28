@@ -4,7 +4,7 @@
 // Tiene que coincidir con supabase/schema.sql.
 
 export type AppointmentStatus =
-  "confirmada" | "pendiente" | "en-consulta" | "completada" | "cancelada";
+  "confirmada" | "pendiente" | "en-consulta" | "completada" | "cancelada" | "no_asistio";
 
 export type PatientStatus = "activo" | "seguimiento" | "nuevo" | "inactivo";
 

@@ -279,6 +279,7 @@ const statusStyles: Record<AppointmentStatus, string> = {
   "en-consulta": "bg-primary-soft text-primary",
   completada: "bg-muted text-muted-foreground",
   cancelada: "bg-danger-soft text-danger",
+  no_asistio: "bg-danger-soft text-danger",
 };
 
 export function StatusBadge({

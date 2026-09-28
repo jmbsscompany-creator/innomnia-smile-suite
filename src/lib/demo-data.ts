@@ -1,7 +1,7 @@
 // Fictional demo data for INNOMNIA Dental. No real people or clinics.
 
 export type AppointmentStatus =
-  "confirmada" | "pendiente" | "en-consulta" | "completada" | "cancelada";
+  "confirmada" | "pendiente" | "en-consulta" | "completada" | "cancelada" | "no_asistio";
 
 export interface Patient {
   id: string;
@@ -620,4 +620,5 @@ export const statusLabel: Record<AppointmentStatus, string> = {
   "en-consulta": "En consulta",
   completada: "Completada",
   cancelada: "Cancelada",
+  no_asistio: "No asistió",
 };

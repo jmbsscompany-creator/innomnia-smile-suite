@@ -16,6 +16,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { Appointment } from "@/lib/database.types";
 import {
   useActualizarCita,
+  useAgregarNotaClinica,
   useCambiarEstadoCita,
   useCitasDeRango,
   useClinica,
@@ -34,7 +35,7 @@ import {
   Section,
   StatusBadge,
 } from "@/components/app/ui";
-import { mensajeRecordatorio } from "@/lib/whatsapp";
+import { mensajeNoAsistio, mensajeRecordatorio } from "@/lib/whatsapp";
 import {
   Buscador,
   Field,
@@ -45,6 +46,7 @@ import {
   TextArea,
   TextInput,
 } from "@/components/app/form";
+import { formatShortDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 const title = "Agenda de citas — INNOMNIA Dental";
@@ -137,6 +139,12 @@ function AppointmentsPage() {
   const [editando, setEditando] = useState<Appointment | null>(null);
   const [formEdit, setFormEdit] = useState<NuevaCita>({ ...FORM_VACIO, date: aISO(new Date()) });
   const [confirmarBorrar, setConfirmarBorrar] = useState<string | null>(null);
+  // Cuando ya paso el dia de una cita que se quedo en pendiente/confirmada,
+  // en vez de dejarla asi para siempre se le pregunta si el paciente vino.
+  // Si no vino, se le pide un motivo (opcional) y eso se anota tambien en
+  // el historial del paciente, para poder darle seguimiento despues.
+  const [marcandoNoAsistio, setMarcandoNoAsistio] = useState<string | null>(null);
+  const [motivoNoAsistio, setMotivoNoAsistio] = useState("");
 
   const lunes = useMemo(() => lunesDe(semana), [semana]);
   const dias = useMemo(() => Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i)), [lunes]);
@@ -152,6 +160,7 @@ function AppointmentsPage() {
   const cambiarEstado = useCambiarEstadoCita();
   const actualizar = useActualizarCita();
   const eliminar = useEliminarCita();
+  const agregarNota = useAgregarNotaClinica();
 
   const clinica = useClinica();
   const nombreClinica = clinica.data?.name?.trim() ?? "";
@@ -262,6 +271,55 @@ function AppointmentsPage() {
   async function confirmarYBorrar(id: string) {
     await eliminar.mutateAsync(id);
     setConfirmarBorrar(null);
+  }
+
+  /** Ya paso el dia de esa cita y sigue sin resolverse (ni confirmada ni cancelada a tiempo). */
+  function yaPaso(c: Appointment) {
+    return c.date < hoy;
+  }
+
+  function marcarSiAsistio(c: Appointment) {
+    cambiarEstado.mutate({ id: c.id, status: "completada" });
+  }
+
+  function abrirNoAsistio(id: string) {
+    setMarcandoNoAsistio(id);
+    setMotivoNoAsistio("");
+  }
+
+  function cerrarNoAsistio() {
+    setMarcandoNoAsistio(null);
+    setMotivoNoAsistio("");
+  }
+
+  /**
+   * Marca que el paciente no vino: cambia el estado, guarda el motivo (si
+   * escribio uno) en las notas de la cita, y ademas deja una anotacion en
+   * el historial del paciente — asi queda registrado para poder darle
+   * seguimiento despues, y no se pierde entre las citas viejas.
+   */
+  async function confirmarNoAsistio(c: Appointment) {
+    const motivo = motivoNoAsistio.trim();
+    const notasFinal = motivo
+      ? [c.notes, `No asistió: ${motivo}`].filter(Boolean).join(" · ")
+      : c.notes;
+    try {
+      await actualizar.mutateAsync({
+        id: c.id,
+        cambios: { status: "no_asistio", notes: notasFinal },
+      });
+      if (c.patient_id) {
+        const detalle = motivo ? ` Motivo: ${motivo}` : "";
+        await agregarNota.mutateAsync({
+          patientId: c.patient_id,
+          fecha: hoy,
+          nota: `No asistió a la cita del ${formatShortDate(c.date)} a las ${c.time.slice(0, 5)}.${detalle}`,
+        });
+      }
+      cerrarNoAsistio();
+    } catch {
+      // El error se muestra junto al aviso.
+    }
   }
 
   const rangoTexto = `${dias[0]!.getDate()} al ${dias[6]!.getDate()} de ${MESES[dias[6]!.getMonth()]} de ${dias[6]!.getFullYear()}`;
@@ -431,7 +489,9 @@ function AppointmentsPage() {
                                   ? "border-border-strong bg-muted text-muted-foreground"
                                   : c.status === "cancelada"
                                     ? "border-danger bg-danger-soft text-danger line-through"
-                                    : "border-primary bg-primary-soft text-primary-soft-foreground",
+                                    : c.status === "no_asistio"
+                                      ? "border-danger bg-danger-soft text-danger"
+                                      : "border-primary bg-primary-soft text-primary-soft-foreground",
                             )}
                           >
                             {c.time.slice(0, 5)} {nombrePaciente(c.patient_id)}
@@ -505,81 +565,158 @@ function AppointmentsPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      {c.status === "pendiente" && (
-                        <Button
-                          variant="soft"
-                          size="sm"
-                          disabled={cambiarEstado.isPending}
-                          onClick={() => cambiarEstado.mutate({ id: c.id, status: "confirmada" })}
-                        >
-                          <Check /> <span className="hidden sm:inline">Confirmar</span>
-                        </Button>
-                      )}
-                      {/* Recordatorio por WhatsApp, con el texto ya escrito.
-                          Solo si la cita sigue en pie: recordar una cancelada
-                          o una que ya paso no tiene sentido. */}
-                      {(c.status === "confirmada" || c.status === "pendiente") && (
-                        <BotonWhatsApp
-                          telefono={telefonoPaciente(c.patient_id)}
-                          size="sm"
-                          etiqueta=""
-                          mensaje={mensajeRecordatorio(
-                            nombrePaciente(c.patient_id),
-                            nombreClinica,
-                            `${fechaSel.getDate()} de ${MESES[fechaSel.getMonth()]}`,
-                            c.time.slice(0, 5),
-                          )}
-                        />
-                      )}
-                      <StatusBadge status={c.status} />
-                      {(c.status === "confirmada" || c.status === "pendiente") && (
-                        <button
-                          onClick={() => cambiarEstado.mutate({ id: c.id, status: "cancelada" })}
-                          disabled={cambiarEstado.isPending}
-                          aria-label="Cancelar cita"
-                          title="Cancelar cita"
-                          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-warning-soft hover:text-warning"
-                        >
-                          <X className="size-4" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => abrirEditar(c)}
-                        aria-label="Editar o reagendar cita"
-                        title="Editar / reagendar"
-                        className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary"
-                      >
-                        <Pencil className="size-4" />
-                      </button>
-                      {confirmarBorrar === c.id ? (
-                        <div className="flex shrink-0 items-center gap-1.5 rounded-lg bg-danger-soft px-2 py-1">
-                          <span className="text-xs font-medium text-danger">¿Borrar?</span>
-                          <button
-                            onClick={() => void confirmarYBorrar(c.id)}
-                            disabled={eliminar.isPending}
-                            className="rounded-md bg-danger px-2 py-1 text-xs font-semibold text-white"
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      {yaPaso(c) && (c.status === "pendiente" || c.status === "confirmada") ? (
+                        // Ya paso el dia y nadie dijo que paso: en vez de
+                        // dejarla pegada en "Pendiente", se pregunta derecho.
+                        <>
+                          <span className="text-xs font-medium text-muted-foreground">
+                            ¿Asistió?
+                          </span>
+                          <Button
+                            variant="soft"
+                            size="sm"
+                            disabled={cambiarEstado.isPending}
+                            onClick={() => marcarSiAsistio(c)}
                           >
-                            Sí
-                          </button>
-                          <button
-                            onClick={() => setConfirmarBorrar(null)}
-                            className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                            <Check /> Sí
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={actualizar.isPending}
+                            onClick={() => abrirNoAsistio(c.id)}
                           >
-                            No
-                          </button>
-                        </div>
+                            <X /> No
+                          </Button>
+                        </>
                       ) : (
-                        <button
-                          onClick={() => pedirBorrar(c.id)}
-                          aria-label="Eliminar cita"
-                          title="Eliminar"
-                          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-danger-soft hover:text-danger"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
+                        <>
+                          {c.status === "pendiente" && (
+                            <Button
+                              variant="soft"
+                              size="sm"
+                              disabled={cambiarEstado.isPending}
+                              onClick={() =>
+                                cambiarEstado.mutate({ id: c.id, status: "confirmada" })
+                              }
+                            >
+                              <Check /> <span className="hidden sm:inline">Confirmar</span>
+                            </Button>
+                          )}
+                          {/* Recordatorio por WhatsApp, con el texto ya escrito.
+                              Solo si la cita sigue en pie: recordar una cancelada
+                              o una que ya paso no tiene sentido. */}
+                          {(c.status === "confirmada" || c.status === "pendiente") && (
+                            <BotonWhatsApp
+                              telefono={telefonoPaciente(c.patient_id)}
+                              size="sm"
+                              etiqueta=""
+                              mensaje={mensajeRecordatorio(
+                                nombrePaciente(c.patient_id),
+                                nombreClinica,
+                                `${fechaSel.getDate()} de ${MESES[fechaSel.getMonth()]}`,
+                                c.time.slice(0, 5),
+                              )}
+                            />
+                          )}
+                          {/* No vino: seguimiento por WhatsApp para saber que
+                              paso y, si quiere, reagendarle. */}
+                          {c.status === "no_asistio" && (
+                            <BotonWhatsApp
+                              telefono={telefonoPaciente(c.patient_id)}
+                              size="sm"
+                              etiqueta=""
+                              mensaje={mensajeNoAsistio(
+                                nombrePaciente(c.patient_id),
+                                nombreClinica,
+                                `${fechaSel.getDate()} de ${MESES[fechaSel.getMonth()]}`,
+                                c.time.slice(0, 5),
+                              )}
+                            />
+                          )}
+                          <StatusBadge status={c.status} />
+                          {(c.status === "confirmada" || c.status === "pendiente") && (
+                            <button
+                              onClick={() =>
+                                cambiarEstado.mutate({ id: c.id, status: "cancelada" })
+                              }
+                              disabled={cambiarEstado.isPending}
+                              aria-label="Cancelar cita"
+                              title="Cancelar cita"
+                              className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-warning-soft hover:text-warning"
+                            >
+                              <X className="size-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => abrirEditar(c)}
+                            aria-label="Editar o reagendar cita"
+                            title="Editar / reagendar"
+                            className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary"
+                          >
+                            <Pencil className="size-4" />
+                          </button>
+                          {confirmarBorrar === c.id ? (
+                            <div className="flex shrink-0 items-center gap-1.5 rounded-lg bg-danger-soft px-2 py-1">
+                              <span className="text-xs font-medium text-danger">¿Borrar?</span>
+                              <button
+                                onClick={() => void confirmarYBorrar(c.id)}
+                                disabled={eliminar.isPending}
+                                className="rounded-md bg-danger px-2 py-1 text-xs font-semibold text-white"
+                              >
+                                Sí
+                              </button>
+                              <button
+                                onClick={() => setConfirmarBorrar(null)}
+                                className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => pedirBorrar(c.id)}
+                              aria-label="Eliminar cita"
+                              title="Eliminar"
+                              className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-danger-soft hover:text-danger"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
+                    {/* Formulario chiquito para el motivo, justo debajo de esa cita. */}
+                    {marcandoNoAsistio === c.id && (
+                      <div className="col-span-full mt-1 flex flex-col gap-2 rounded-xl bg-muted/60 p-3 sm:flex-row sm:items-center">
+                        <TextInput
+                          value={motivoNoAsistio}
+                          onChange={(e) => setMotivoNoAsistio(e.target.value)}
+                          placeholder="¿Por qué no vino? (opcional)"
+                          autoFocus
+                          className="flex-1"
+                        />
+                        <div className="flex shrink-0 gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={actualizar.isPending}
+                            onClick={() => void confirmarNoAsistio(c)}
+                          >
+                            {actualizar.isPending ? "Guardando..." : "Guardar"}
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={cerrarNoAsistio}>
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {marcandoNoAsistio === c.id && actualizar.isError && (
+                      <p role="alert" className="col-span-full mt-1 text-sm text-danger">
+                        {actualizar.error.message}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ol>
@@ -610,11 +747,18 @@ function AppointmentsPage() {
                     ["Confirmadas", "confirmada"],
                     ["Pendientes", "pendiente"],
                     ["Completadas", "completada"],
+                    ["No asistió", "no_asistio"],
                   ] as const
                 ).map(([etiqueta, estado]) => (
                   <li key={estado} className="flex items-center justify-between">
                     <span className="text-muted-foreground">{etiqueta}</span>
-                    <span className={cn("font-semibold", estado === "pendiente" && "text-warning")}>
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        estado === "pendiente" && "text-warning",
+                        estado === "no_asistio" && "text-danger",
+                      )}
+                    >
                       {delDia.filter((c) => c.status === estado).length}
                     </span>
                   </li>
@@ -857,6 +1001,7 @@ function AppointmentsPage() {
                 <option value="en-consulta">En consulta</option>
                 <option value="completada">Completada</option>
                 <option value="cancelada">Cancelada</option>
+                <option value="no_asistio">No asistió</option>
               </SelectInput>
             </Field>
           </FormGrid>

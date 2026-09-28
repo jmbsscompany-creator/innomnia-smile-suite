@@ -128,3 +128,16 @@ export function mensajeSeguimiento(nombre: string, clinica: string): string {
     `Queríamos saber cómo sigue y si desea agendar una revisión.`
   );
 }
+
+/** Para cuando un paciente no vino a su cita: se le escribe para dar seguimiento. */
+export function mensajeNoAsistio(
+  nombre: string,
+  clinica: string,
+  fecha: string,
+  hora: string,
+): string {
+  return (
+    `${saludo(nombre, clinica)} Notamos que no pudo venir a su cita ${cuando(fecha)} a las ${hora}. ` +
+    `¿Le gustaría que le agendemos una nueva fecha?`
+  );
+}
