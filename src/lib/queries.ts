@@ -299,6 +299,34 @@ export function useCambiarEstadoCita() {
   });
 }
 
+/** Edita una cita ya creada: cambiar fecha/hora (reagendar), doctor, estado, etc. */
+export function useActualizarCita() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, cambios }: { id: string; cambios: Partial<Appointment> }) => {
+      const { error } = await supabase.from("appointments").update(cambios).eq("id", id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_CITAS });
+    },
+  });
+}
+
+/** Borra una cita por completo (por ejemplo, si se agendo por equivocacion). */
+export function useEliminarCita() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("appointments").delete().eq("id", id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_CITAS });
+    },
+  });
+}
+
 /* ============ SERVICIOS ============ */
 
 export const CLAVE_SERVICIOS = ["servicios"] as const;

@@ -5,19 +5,24 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Pencil,
   Plus,
+  Trash2,
   TriangleAlert,
   UserPlus,
+  X,
 } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import type { Appointment } from "@/lib/database.types";
 import {
+  useActualizarCita,
   useCambiarEstadoCita,
   useCitasDeRango,
   useClinica,
   useCrearCita,
   useCrearDoctor,
   useDoctores,
+  useEliminarCita,
   usePacientes,
   type NuevaCita,
 } from "@/lib/queries";
@@ -129,6 +134,9 @@ function AppointmentsPage() {
   const [seleccionado, setSeleccionado] = useState(() => aISO(new Date()));
   const [abierto, setAbierto] = useState(false);
   const [form, setForm] = useState(FORM_VACIO);
+  const [editando, setEditando] = useState<Appointment | null>(null);
+  const [formEdit, setFormEdit] = useState<NuevaCita>({ ...FORM_VACIO, date: aISO(new Date()) });
+  const [confirmarBorrar, setConfirmarBorrar] = useState<string | null>(null);
 
   const lunes = useMemo(() => lunesDe(semana), [semana]);
   const dias = useMemo(() => Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i)), [lunes]);
@@ -142,6 +150,8 @@ function AppointmentsPage() {
   const crear = useCrearCita();
   const crearDoctor = useCrearDoctor();
   const cambiarEstado = useCambiarEstadoCita();
+  const actualizar = useActualizarCita();
+  const eliminar = useEliminarCita();
 
   const clinica = useClinica();
   const nombreClinica = clinica.data?.name?.trim() ?? "";
@@ -207,6 +217,51 @@ function AppointmentsPage() {
     } catch {
       // El error se muestra dentro del modal.
     }
+  }
+
+  /** Abre el modal de edicion con los datos actuales de esa cita. */
+  function abrirEditar(c: Appointment) {
+    setFormEdit({
+      patient_id: c.patient_id,
+      dentist_id: c.dentist_id,
+      date: c.date,
+      time: c.time.slice(0, 5),
+      duration: c.duration,
+      treatment: c.treatment,
+      dentist: c.dentist,
+      status: c.status,
+      notes: c.notes,
+    });
+    setEditando(c);
+  }
+
+  function cerrarEditar() {
+    setEditando(null);
+    actualizar.reset();
+  }
+
+  function cambiarEdit<K extends keyof NuevaCita>(campo: K, valor: NuevaCita[K]) {
+    setFormEdit((prev) => ({ ...prev, [campo]: valor }));
+  }
+
+  async function guardarEdicion(e: FormEvent) {
+    e.preventDefault();
+    if (!editando) return;
+    try {
+      await actualizar.mutateAsync({ id: editando.id, cambios: formEdit });
+      cerrarEditar();
+    } catch {
+      // El error se muestra dentro del modal.
+    }
+  }
+
+  function pedirBorrar(id: string) {
+    setConfirmarBorrar(id);
+  }
+
+  async function confirmarYBorrar(id: string) {
+    await eliminar.mutateAsync(id);
+    setConfirmarBorrar(null);
   }
 
   const rangoTexto = `${dias[0]!.getDate()} al ${dias[6]!.getDate()} de ${MESES[dias[6]!.getMonth()]} de ${dias[6]!.getFullYear()}`;
@@ -450,7 +505,7 @@ function AppointmentsPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       {c.status === "pendiente" && (
                         <Button
                           variant="soft"
@@ -478,6 +533,52 @@ function AppointmentsPage() {
                         />
                       )}
                       <StatusBadge status={c.status} />
+                      {(c.status === "confirmada" || c.status === "pendiente") && (
+                        <button
+                          onClick={() => cambiarEstado.mutate({ id: c.id, status: "cancelada" })}
+                          disabled={cambiarEstado.isPending}
+                          aria-label="Cancelar cita"
+                          title="Cancelar cita"
+                          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-warning-soft hover:text-warning"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => abrirEditar(c)}
+                        aria-label="Editar o reagendar cita"
+                        title="Editar / reagendar"
+                        className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary"
+                      >
+                        <Pencil className="size-4" />
+                      </button>
+                      {confirmarBorrar === c.id ? (
+                        <div className="flex shrink-0 items-center gap-1.5 rounded-lg bg-danger-soft px-2 py-1">
+                          <span className="text-xs font-medium text-danger">¿Borrar?</span>
+                          <button
+                            onClick={() => void confirmarYBorrar(c.id)}
+                            disabled={eliminar.isPending}
+                            className="rounded-md bg-danger px-2 py-1 text-xs font-semibold text-white"
+                          >
+                            Sí
+                          </button>
+                          <button
+                            onClick={() => setConfirmarBorrar(null)}
+                            className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => pedirBorrar(c.id)}
+                          aria-label="Eliminar cita"
+                          title="Eliminar"
+                          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-danger-soft hover:text-danger"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -680,6 +781,131 @@ function AppointmentsPage() {
             )}
           </form>
         )}
+      </Modal>
+
+      {/* Editar / reagendar / cancelar una cita ya existente */}
+      <Modal
+        open={editando !== null}
+        onClose={cerrarEditar}
+        title="Editar cita"
+        description="Cambia el día, la hora o lo que haga falta. Si se equivocaron, aquí se corrige."
+        size="lg"
+        footer={
+          <ModalActions
+            onCancel={cerrarEditar}
+            formId="form-editar-cita"
+            disabled={actualizar.isPending}
+            submitLabel={actualizar.isPending ? "Guardando..." : "Guardar cambios"}
+          />
+        }
+      >
+        <form id="form-editar-cita" onSubmit={guardarEdicion} className="space-y-4">
+          <Field label="Paciente">
+            <Buscador
+              value={formEdit.patient_id}
+              onChange={(id) => cambiarEdit("patient_id", id)}
+              placeholder="Escribe el nombre del paciente..."
+              vacioTexto="Ningún paciente con ese nombre"
+              required
+              options={(pacientes.data ?? []).map((p) => ({
+                id: p.id,
+                label: p.name,
+                ...(p.phone ? { hint: p.phone } : {}),
+              }))}
+            />
+          </Field>
+
+          <FormGrid>
+            <Field label="Fecha">
+              <TextInput
+                type="date"
+                value={formEdit.date}
+                onChange={(e) => cambiarEdit("date", e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Hora">
+              <TextInput
+                type="time"
+                value={formEdit.time}
+                onChange={(e) => cambiarEdit("time", e.target.value)}
+                required
+              />
+            </Field>
+          </FormGrid>
+
+          <FormGrid>
+            <Field label="Duración" hint="En minutos.">
+              <SelectInput
+                value={String(formEdit.duration)}
+                onChange={(e) => cambiarEdit("duration", Number(e.target.value))}
+              >
+                {[15, 30, 45, 60, 90, 120].map((m) => (
+                  <option key={m} value={m}>
+                    {m} minutos
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Estado">
+              <SelectInput
+                value={formEdit.status}
+                onChange={(e) => cambiarEdit("status", e.target.value as Appointment["status"])}
+              >
+                <option value="pendiente">Pendiente de confirmar</option>
+                <option value="confirmada">Confirmada</option>
+                <option value="en-consulta">En consulta</option>
+                <option value="completada">Completada</option>
+                <option value="cancelada">Cancelada</option>
+              </SelectInput>
+            </Field>
+          </FormGrid>
+
+          <FormGrid>
+            <Field label="Tratamiento">
+              <TextInput
+                value={formEdit.treatment}
+                onChange={(e) => cambiarEdit("treatment", e.target.value)}
+                placeholder="Limpieza dental"
+              />
+            </Field>
+            <Field label="Odontólogo" hint="Si no está en la lista, escríbelo y lo agregas.">
+              <Buscador
+                value={formEdit.dentist_id}
+                onChange={(id) => cambiarEdit("dentist_id", id)}
+                placeholder="Busca o escribe un doctor..."
+                vacioTexto="Ningún doctor con ese nombre"
+                onCrear={agregarDoctor}
+                crearTexto="Agregar doctor"
+                options={(doctores.data ?? [])
+                  .filter((d) => d.active)
+                  .map((d) => ({
+                    id: d.id,
+                    label: d.name,
+                    ...(d.specialty ? { hint: d.specialty } : {}),
+                  }))}
+              />
+            </Field>
+          </FormGrid>
+
+          <Field label="Notas">
+            <TextArea
+              value={formEdit.notes}
+              onChange={(e) => cambiarEdit("notes", e.target.value)}
+              placeholder="Motivo de la consulta, observaciones..."
+            />
+          </Field>
+
+          {actualizar.isError && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-xl bg-danger-soft px-3.5 py-3 text-sm text-danger"
+            >
+              <TriangleAlert className="mt-px size-4 shrink-0" />
+              <span>{actualizar.error.message}</span>
+            </p>
+          )}
+        </form>
       </Modal>
     </div>
   );
