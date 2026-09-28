@@ -108,6 +108,7 @@ function FichaPaciente() {
   const [montoCargo, setMontoCargo] = useState(0);
   const [fechaCargo, setFechaCargo] = useState(hoyISO());
   const [estadoPagoCargo, setEstadoPagoCargo] = useState<"pagado" | "parcial" | "debe">("pagado");
+  const [notaVinculadaCargo, setNotaVinculadaCargo] = useState("");
   const [montoPagadoCargo, setMontoPagadoCargo] = useState(0);
   const [metodoPagoCargo, setMetodoPagoCargo] = useState<Payment["method"]>("efectivo");
   const crearCobro = useCrearCobro();
@@ -212,6 +213,7 @@ function FichaPaciente() {
         concepto: conceptoCargo.trim(),
         monto: montoCargo,
         fecha: fechaCargo,
+        nota_id: notaVinculadaCargo || null,
       });
       if (pagadoAhora > 0) {
         await crearCobro.mutateAsync({
@@ -229,6 +231,7 @@ function FichaPaciente() {
       setMontoPagadoCargo(0);
       setEstadoPagoCargo("pagado");
       setFechaCargo(hoyISO());
+      setNotaVinculadaCargo("");
       await paciente.refetch();
     } catch {
       // El error se muestra abajo, junto al formulario.
@@ -318,6 +321,12 @@ function FichaPaciente() {
   const totalCobrado = listaCobros.reduce((s, c) => s + Number(c.amount), 0);
   const listaCargos = cargos.data ?? [];
   const listaNotas = notas.data ?? [];
+  // Para mostrar "este cargo es por tal procedimiento" sin pedirlo de nuevo al servidor.
+  const notaPorId = new Map(listaNotas.map((n) => [n.id, n]));
+  // Y al reves: "este procedimiento ya tiene un cargo hecho" (el primero que lo referencie).
+  const cargoPorNotaId = new Map(
+    listaCargos.filter((c) => c.nota_id).map((c) => [c.nota_id as string, c]),
+  );
 
   const pestanas: { key: Pestana; label: string; icono: typeof FileText }[] = [
     { key: "ficha", label: "Ficha", icono: FileText },
@@ -671,6 +680,12 @@ function FichaPaciente() {
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {formatShortDate(n.fecha)}
                         </p>
+                        {cargoPorNotaId.has(n.id) && (
+                          <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                            <Wallet className="size-3 shrink-0" /> Cargo de{" "}
+                            {formatDOP(Number(cargoPorNotaId.get(n.id)!.monto))}
+                          </p>
+                        )}
                       </div>
                     </li>
                   ))}
@@ -737,6 +752,25 @@ function FichaPaciente() {
                     placeholder="Ej: Extracción del 26"
                   />
                 </div>
+                {listaNotas.length > 0 && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                      Vincular a un procedimiento (opcional)
+                    </label>
+                    <SelectInput
+                      value={notaVinculadaCargo}
+                      onChange={(e) => setNotaVinculadaCargo(e.target.value)}
+                    >
+                      <option value="">Sin vincular</option>
+                      {listaNotas.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {formatShortDate(n.fecha)} · {n.nota.slice(0, 40)}
+                          {n.nota.length > 40 ? "…" : ""}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </div>
+                )}
                 <FormGrid className="sm:grid-cols-[1fr_140px]">
                   <Field label="Monto en RD$">
                     <TextInput
@@ -868,6 +902,9 @@ function FichaPaciente() {
                               <p className="truncate text-sm font-medium">{c.concepto}</p>
                               <p className="truncate text-xs text-muted-foreground">
                                 {formatShortDate(c.fecha)}
+                                {c.nota_id && notaPorId.has(c.nota_id) && (
+                                  <> · {notaPorId.get(c.nota_id)!.nota}</>
+                                )}
                               </p>
                             </div>
                             <p className="shrink-0 text-sm font-semibold tabular-nums">

@@ -186,6 +186,8 @@ export type Cargo = {
   id: string;
   patient_id: string;
   appointment_id: string | null;
+  /** Procedimiento del historial (notas_clinicas) del que viene este cargo, si aplica. */
+  nota_id: string | null;
   concepto: string;
   monto: number;
   fecha: string;

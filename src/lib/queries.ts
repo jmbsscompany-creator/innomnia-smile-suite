@@ -842,6 +842,8 @@ export interface NuevoCargo {
   concepto: string;
   monto: number;
   fecha: string;
+  /** Procedimiento del historial al que corresponde este cargo, si aplica. */
+  nota_id?: string | null;
 }
 
 /**
