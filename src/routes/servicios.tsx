@@ -1,11 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Clock, FileText, Pencil, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
+import {
+  Clock,
+  FileText,
+  Pencil,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import type { Service } from "@/lib/database.types";
 import {
   useActualizarServicio,
   useCargarServiciosBase,
   useCrearServicio,
+  useEliminarServicio,
   useServicios,
   type NuevoServicio,
 } from "@/lib/queries";
@@ -45,6 +55,7 @@ function ServicesPage() {
   const { data, isPending, isError, error, refetch } = useServicios();
   const crear = useCrearServicio();
   const actualizar = useActualizarServicio();
+  const eliminar = useEliminarServicio();
   const cargarBase = useCargarServiciosBase();
 
   const [cat, setCat] = useState("Todos");
@@ -52,6 +63,7 @@ function ServicesPage() {
   const [abierto, setAbierto] = useState(false);
   const [editando, setEditando] = useState<Service | null>(null);
   const [form, setForm] = useState<NuevoServicio>(FORM_VACIO);
+  const [confirmarBorrar, setConfirmarBorrar] = useState<string | null>(null);
 
   const servicios = data ?? [];
   const vacio = !isPending && !isError && servicios.length === 0;
@@ -129,6 +141,15 @@ function ServicesPage() {
     } catch {
       // El error se muestra dentro del modal.
     }
+  }
+
+  function pedirBorrar(id: string) {
+    setConfirmarBorrar(id);
+  }
+
+  async function confirmarYBorrar(id: string) {
+    await eliminar.mutateAsync(id);
+    setConfirmarBorrar(null);
   }
 
   const guardando = crear.isPending || actualizar.isPending;
@@ -303,13 +324,41 @@ function ServicesPage() {
                             {formatDOP(Number(s.price))}
                           </span>
                           {isDentista && (
-                            <button
-                              onClick={() => abrirEdicion(s)}
-                              aria-label={`Editar ${s.name}`}
-                              className="grid size-9 place-items-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-primary-soft hover:text-primary focus-visible:opacity-100 group-hover:opacity-100"
-                            >
-                              <Pencil className="size-4" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => abrirEdicion(s)}
+                                aria-label={`Editar ${s.name}`}
+                                className="grid size-9 place-items-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-primary-soft hover:text-primary focus-visible:opacity-100 group-hover:opacity-100"
+                              >
+                                <Pencil className="size-4" />
+                              </button>
+                              {confirmarBorrar === s.id ? (
+                                <div className="flex items-center gap-1.5 rounded-lg bg-danger-soft px-2 py-1">
+                                  <span className="text-xs font-medium text-danger">¿Borrar?</span>
+                                  <button
+                                    onClick={() => void confirmarYBorrar(s.id)}
+                                    disabled={eliminar.isPending}
+                                    className="rounded-md bg-danger px-2 py-1 text-xs font-semibold text-white"
+                                  >
+                                    Sí
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmarBorrar(null)}
+                                    className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+                                  >
+                                    No
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => pedirBorrar(s.id)}
+                                  aria-label={`Eliminar ${s.name}`}
+                                  className="grid size-9 place-items-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-danger-soft hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                                >
+                                  <Trash2 className="size-4" />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </li>

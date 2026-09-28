@@ -353,6 +353,19 @@ export function useActualizarServicio() {
   });
 }
 
+export function useEliminarServicio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("services").delete().eq("id", id);
+      if (error) throw new Error(traducirErrorDB(error.message));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CLAVE_SERVICIOS });
+    },
+  });
+}
+
 /** Carga de golpe la lista base de servicios, para no escribirlos a mano. */
 export function useCargarServiciosBase() {
   const qc = useQueryClient();
