@@ -790,17 +790,30 @@ export function useNotasClinicas(pacienteId: string) {
   });
 }
 
-/** Agrega una nota nueva al historial. No toca ni borra las anteriores. */
+/**
+ * Agrega una nota nueva al historial. No toca ni borra las anteriores.
+ * Devuelve la nota creada (con su id) para poder enlazarle un cargo,
+ * cuando el procedimiento tiene costo.
+ */
 export function useAgregarNotaClinica() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { patientId: string; fecha: string; nota: string }): Promise<void> => {
-      const { error } = await supabase.from("notas_clinicas").insert({
-        patient_id: args.patientId,
-        fecha: args.fecha,
-        nota: args.nota,
-      });
+    mutationFn: async (args: {
+      patientId: string;
+      fecha: string;
+      nota: string;
+    }): Promise<NotaClinica> => {
+      const { data, error } = await supabase
+        .from("notas_clinicas")
+        .insert({
+          patient_id: args.patientId,
+          fecha: args.fecha,
+          nota: args.nota,
+        })
+        .select()
+        .single();
       if (error) throw new Error(traducirErrorDB(error.message));
+      return data as NotaClinica;
     },
     onSuccess: (_r, args) => {
       void qc.invalidateQueries({ queryKey: [...CLAVE_NOTAS, "paciente", args.patientId] });
