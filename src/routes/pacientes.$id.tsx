@@ -62,7 +62,7 @@ export const Route = createFileRoute("/pacientes/$id")({
   component: FichaPaciente,
 });
 
-type Pestana = "ficha" | "odontograma" | "periodontograma" | "historial";
+type Pestana = "ficha" | "procedimientos" | "odontograma" | "periodontograma" | "historial";
 
 const tonoEstado = {
   activo: "success",
@@ -101,6 +101,7 @@ function FichaPaciente() {
   // una sola cosa: todo cargo viene de un procedimiento. El monto es
   // opcional (0 = no se cobra nada por esto, por ejemplo una revision).
   const [notaNueva, setNotaNueva] = useState("");
+  const [notasAdicionales, setNotasAdicionales] = useState("");
   const [fechaNotaNueva, setFechaNotaNueva] = useState(hoyISO());
   const [montoCargo, setMontoCargo] = useState(0);
   const [estadoPagoCargo, setEstadoPagoCargo] = useState<"pagado" | "parcial" | "debe">("pagado");
@@ -189,11 +190,18 @@ function FichaPaciente() {
             ? montoPagadoCargo
             : 0;
 
+    // "Notas adicionales" es opcional: si se llena, se le pega debajo a
+    // lo principal para que en el Historial se lea todo junto, sin
+    // necesitar una columna nueva en la base de datos.
+    const notaCompleta = notasAdicionales.trim()
+      ? `${notaNueva.trim()}\n${notasAdicionales.trim()}`
+      : notaNueva.trim();
+
     try {
       const notaCreada = await agregarNota.mutateAsync({
         patientId: id,
         fecha: fechaNotaNueva,
-        nota: notaNueva.trim(),
+        nota: notaCompleta,
       });
 
       if (montoCargo > 0) {
@@ -222,11 +230,15 @@ function FichaPaciente() {
       }
 
       setNotaNueva("");
+      setNotasAdicionales("");
       setFechaNotaNueva(hoyISO());
       setMontoCargo(0);
       setMontoPagadoCargo(0);
       setEstadoPagoCargo("pagado");
       await paciente.refetch();
+      // Se guarda desde "Procedimientos" pero se revisa en "Historial",
+      // que es donde queda la lectura de todo lo que se le ha hecho.
+      setPestana("historial");
     } catch {
       // El error se muestra abajo, junto al formulario.
     }
@@ -324,6 +336,7 @@ function FichaPaciente() {
 
   const pestanas: { key: Pestana; label: string; icono: typeof FileText }[] = [
     { key: "ficha", label: "Ficha", icono: FileText },
+    { key: "procedimientos", label: "Procedimientos", icono: Plus },
     { key: "odontograma", label: "Odontograma", icono: Check },
     { key: "periodontograma", label: "Periodontograma", icono: Activity },
     { key: "historial", label: "Historial", icono: CalendarDays },
@@ -481,6 +494,142 @@ function FichaPaciente() {
         </Section>
       )}
 
+      {/* ---------- PROCEDIMIENTOS (formulario para anotar algo nuevo) ---------- */}
+      {pestana === "procedimientos" && (
+        <Section title="Nuevo procedimiento">
+          <p className="mb-3 text-sm text-muted-foreground">
+            Anota qué se le hizo al paciente. Si tiene costo, se cobra en el mismo paso — no hace
+            falta anotarlo dos veces. Lo que guardes aquí se va a ver en "Historial".
+          </p>
+          <form onSubmit={agregarProcedimiento} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Qué se hizo
+                </label>
+                <TextInput
+                  value={notaNueva}
+                  onChange={(e) => setNotaNueva(e.target.value)}
+                  placeholder="Ej: Limpieza dental, extracción del 26..."
+                />
+              </div>
+              <div className="sm:w-40">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Fecha
+                </label>
+                <TextInput
+                  type="date"
+                  value={fechaNotaNueva}
+                  onChange={(e) => setFechaNotaNueva(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Notas adicionales (opcional)
+              </label>
+              <TextArea
+                value={notasAdicionales}
+                onChange={(e) => setNotasAdicionales(e.target.value)}
+                placeholder="Detalles, observaciones, material usado, como quedo el paciente..."
+                rows={3}
+              />
+            </div>
+
+            <FormGrid className="sm:grid-cols-[1fr_1fr]">
+              <Field label="Precio en RD$" hint="Déjalo en 0 si no se cobra nada por esto.">
+                <TextInput
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={String(montoCargo)}
+                  onChange={(e) => setMontoCargo(Number(e.target.value))}
+                />
+              </Field>
+              {montoCargo > 0 && estadoPagoCargo === "parcial" && (
+                <Field label="Cuánto pagó ahora, en RD$">
+                  <TextInput
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={String(montoPagadoCargo)}
+                    onChange={(e) => setMontoPagadoCargo(Number(e.target.value))}
+                  />
+                </Field>
+              )}
+            </FormGrid>
+
+            {montoCargo > 0 && (
+              <>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    ¿Cómo quedó el pago?
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        ["pagado", "Pagó todo"],
+                        ["parcial", "Pagó parte"],
+                        ["debe", "Debe todo"],
+                      ] as const
+                    ).map(([valor, etiqueta]) => (
+                      <button
+                        key={valor}
+                        type="button"
+                        onClick={() => setEstadoPagoCargo(valor)}
+                        className={cn(
+                          "h-9 shrink-0 rounded-lg border px-3.5 text-sm font-medium transition-colors",
+                          estadoPagoCargo === valor
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border-strong bg-card text-muted-foreground hover:border-primary/40 hover:text-primary",
+                        )}
+                      >
+                        {etiqueta}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Field label="Forma de pago">
+                  <SelectInput
+                    value={metodoPagoCargo}
+                    onChange={(e) => setMetodoPagoCargo(e.target.value as Payment["method"])}
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta">Tarjeta</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="seguro">Seguro</option>
+                  </SelectInput>
+                </Field>
+              </>
+            )}
+
+            <Button
+              type="submit"
+              disabled={
+                agregarNota.isPending ||
+                crearCargo.isPending ||
+                crearCobro.isPending ||
+                !notaNueva.trim() ||
+                (montoCargo > 0 &&
+                  estadoPagoCargo === "parcial" &&
+                  (montoPagadoCargo <= 0 || montoPagadoCargo >= montoCargo))
+              }
+              className="self-start"
+            >
+              {agregarNota.isPending || crearCargo.isPending || crearCobro.isPending
+                ? "Agregando..."
+                : "Agregar al historial"}
+            </Button>
+          </form>
+          {(agregarNota.isError || crearCargo.isError || crearCobro.isError) && (
+            <p role="alert" className="mt-2 text-sm text-danger">
+              {agregarNota.error?.message ?? crearCargo.error?.message ?? crearCobro.error?.message}
+            </p>
+          )}
+        </Section>
+      )}
+
       {/* ---------- ODONTOGRAMA ---------- */}
       {pestana === "odontograma" && (
         <Section title="Odontograma">
@@ -616,128 +765,21 @@ function FichaPaciente() {
       {pestana === "historial" && (
         <div className="space-y-4">
           <Section title="Procedimientos">
-            <p className="mb-3 text-sm text-muted-foreground">
-              Lo que se le ha ido haciendo al paciente, visita tras visita. Si tiene costo, se cobra
-              en el mismo paso — no hace falta anotarlo dos veces.
-            </p>
-            <form onSubmit={agregarProcedimiento} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Qué se hizo
-                  </label>
-                  <TextInput
-                    value={notaNueva}
-                    onChange={(e) => setNotaNueva(e.target.value)}
-                    placeholder="Ej: Limpieza dental, extracción del 26..."
-                  />
-                </div>
-                <div className="sm:w-40">
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Fecha
-                  </label>
-                  <TextInput
-                    type="date"
-                    value={fechaNotaNueva}
-                    onChange={(e) => setFechaNotaNueva(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <FormGrid className="sm:grid-cols-[1fr_1fr]">
-                <Field label="Monto en RD$" hint="Déjalo en 0 si no se cobra nada por esto.">
-                  <TextInput
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={String(montoCargo)}
-                    onChange={(e) => setMontoCargo(Number(e.target.value))}
-                  />
-                </Field>
-                {montoCargo > 0 && estadoPagoCargo === "parcial" && (
-                  <Field label="Cuánto pagó ahora, en RD$">
-                    <TextInput
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={String(montoPagadoCargo)}
-                      onChange={(e) => setMontoPagadoCargo(Number(e.target.value))}
-                    />
-                  </Field>
-                )}
-              </FormGrid>
-
-              {montoCargo > 0 && (
-                <>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                      ¿Cómo quedó el pago?
-                    </label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(
-                        [
-                          ["pagado", "Pagó todo"],
-                          ["parcial", "Pagó parte"],
-                          ["debe", "Debe todo"],
-                        ] as const
-                      ).map(([valor, etiqueta]) => (
-                        <button
-                          key={valor}
-                          type="button"
-                          onClick={() => setEstadoPagoCargo(valor)}
-                          className={cn(
-                            "h-9 shrink-0 rounded-lg border px-3.5 text-sm font-medium transition-colors",
-                            estadoPagoCargo === valor
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border-strong bg-card text-muted-foreground hover:border-primary/40 hover:text-primary",
-                          )}
-                        >
-                          {etiqueta}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <Field label="Forma de pago">
-                    <SelectInput
-                      value={metodoPagoCargo}
-                      onChange={(e) => setMetodoPagoCargo(e.target.value as Payment["method"])}
-                    >
-                      <option value="efectivo">Efectivo</option>
-                      <option value="tarjeta">Tarjeta</option>
-                      <option value="transferencia">Transferencia</option>
-                      <option value="seguro">Seguro</option>
-                    </SelectInput>
-                  </Field>
-                </>
-              )}
-
-              <Button
-                type="submit"
-                disabled={
-                  agregarNota.isPending ||
-                  crearCargo.isPending ||
-                  crearCobro.isPending ||
-                  !notaNueva.trim() ||
-                  (montoCargo > 0 &&
-                    estadoPagoCargo === "parcial" &&
-                    (montoPagadoCargo <= 0 || montoPagadoCargo >= montoCargo))
-                }
-                className="self-start"
-              >
-                {agregarNota.isPending || crearCargo.isPending || crearCobro.isPending
-                  ? "Agregando..."
-                  : "Agregar al historial"}
-              </Button>
-            </form>
-            {(agregarNota.isError || crearCargo.isError || crearCobro.isError) && (
-              <p role="alert" className="mt-2 text-sm text-danger">
-                {agregarNota.error?.message ??
-                  crearCargo.error?.message ??
-                  crearCobro.error?.message}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                La historia de lo que se le ha ido haciendo al paciente, visita tras visita.
               </p>
-            )}
+              <Button
+                type="button"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setPestana("procedimientos")}
+              >
+                <Plus /> Nuevo procedimiento
+              </Button>
+            </div>
 
-            <div className="mt-4 border-t border-border pt-4">
+            <div className="border-t border-border pt-4">
               {notas.isPending ? (
                 <div className="h-20 animate-pulse rounded-xl bg-muted" aria-hidden />
               ) : listaNotas.length === 0 ? (
@@ -753,7 +795,7 @@ function FichaPaciente() {
                         <ClipboardList className="size-3.5" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[15px] leading-snug">{n.nota}</p>
+                        <p className="whitespace-pre-line text-[15px] leading-snug">{n.nota}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {formatShortDate(n.fecha)}
                         </p>
