@@ -31,12 +31,13 @@ import {
   hoyISO,
   usePaciente,
   useRegistrarDiente,
+  useServicios,
 } from "@/lib/queries";
 import { LeyendaOdontograma, Odontograma, type AccionDiente } from "@/components/app/Odontograma";
 import { Periodontograma } from "@/components/app/Periodontograma";
 import { GraficoPeriodontal } from "@/components/app/GraficoPeriodontal";
 import { IndicesPeriodontal } from "@/components/app/IndicesPeriodontal";
-import { edadDesde, formatDOP } from "@/lib/format";
+import { edadDesde, formatDOP, normalizar } from "@/lib/format";
 import { enlaceLlamada, mensajeRecordatorio, saludo } from "@/lib/whatsapp";
 import { formatShortDate } from "@/lib/dates";
 import {
@@ -86,6 +87,7 @@ function FichaPaciente() {
   const crearCargo = useCrearCargo();
   const notas = useNotasClinicas(id);
   const agregarNota = useAgregarNotaClinica();
+  const servicios = useServicios();
   const historialOdonto = useHistorialOdontograma(id);
   const guardar = useActualizarPaciente();
   const registrar = useRegistrarDiente();
@@ -108,6 +110,10 @@ function FichaPaciente() {
   const [montoPagadoCargo, setMontoPagadoCargo] = useState(0);
   const [metodoPagoCargo, setMetodoPagoCargo] = useState<Payment["method"]>("efectivo");
   const crearCobro = useCrearCobro();
+  // Se pone en true justo despues de guardar un procedimiento, para
+  // mostrar el atajo de "agregar al odontograma" (facil que se le olvide
+  // a la secretaria si no se lo recordamos ahi mismo).
+  const [procedimientoGuardado, setProcedimientoGuardado] = useState(false);
 
   // Abonar a un cargo que quedo debiendo (o parcial): se abre un
   // formulario chiquito justo debajo de esa fila, para no tener que
@@ -236,11 +242,28 @@ function FichaPaciente() {
       setMontoPagadoCargo(0);
       setEstadoPagoCargo("pagado");
       await paciente.refetch();
-      // Se guarda desde "Procedimientos" pero se revisa en "Historial",
-      // que es donde queda la lectura de todo lo que se le ha hecho.
-      setPestana("historial");
+      // No se manda para otra pestana sola: se le da la opcion de ir a
+      // Historial a verlo, o directo a Odontograma por si ese
+      // procedimiento hay que marcarlo ahi tambien (para que no se le
+      // olvide a la secretaria).
+      setProcedimientoGuardado(true);
     } catch {
       // El error se muestra abajo, junto al formulario.
+    }
+  }
+
+  /**
+   * Si lo que se escribio en "Que se hizo" coincide con un servicio de la
+   * lista (por ejemplo, lo eligio de las sugerencias), rellena el precio
+   * solo, para no tener que buscarlo aparte. Si ya habia un precio puesto
+   * a mano, no se lo pisa.
+   */
+  function cambiarQueSeHizo(texto: string) {
+    setNotaNueva(texto);
+    setProcedimientoGuardado(false);
+    if (montoCargo === 0) {
+      const precio = precioPorNombreServicio.get(normalizar(texto));
+      if (precio) setMontoCargo(precio);
     }
   }
 
@@ -332,6 +355,14 @@ function FichaPaciente() {
   // Y al reves: "este procedimiento ya tiene un cargo hecho" (el primero que lo referencie).
   const cargoPorNotaId = new Map(
     listaCargos.filter((c) => c.nota_id).map((c) => [c.nota_id as string, c]),
+  );
+
+  // Servicios de la clinica, para sugerirlos en "Que se hizo" y no tener
+  // que escribirlos a mano cada vez. "normalizar" quita tildes/mayusculas
+  // para que coincida aunque se escriba distinto a como esta guardado.
+  const listaServicios = (servicios.data ?? []).filter((s) => s.active);
+  const precioPorNombreServicio = new Map(
+    listaServicios.map((s) => [normalizar(s.name), Number(s.price)]),
   );
 
   const pestanas: { key: Pestana; label: string; icono: typeof FileText }[] = [
@@ -509,9 +540,19 @@ function FichaPaciente() {
                 </label>
                 <TextInput
                   value={notaNueva}
-                  onChange={(e) => setNotaNueva(e.target.value)}
+                  onChange={(e) => cambiarQueSeHizo(e.target.value)}
                   placeholder="Ej: Limpieza dental, extracción del 26..."
+                  list="lista-servicios-procedimiento"
+                  autoComplete="off"
                 />
+                {/* Sugerencias con los servicios ya cargados en "Servicios",
+                    para no tener que escribirlos de nuevo — pero se puede
+                    seguir escribiendo lo que sea, no es obligatorio elegir. */}
+                <datalist id="lista-servicios-procedimiento">
+                  {listaServicios.map((s) => (
+                    <option key={s.id} value={s.name} />
+                  ))}
+                </datalist>
               </div>
               <div className="sm:w-40">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -626,6 +667,29 @@ function FichaPaciente() {
             <p role="alert" className="mt-2 text-sm text-danger">
               {agregarNota.error?.message ?? crearCargo.error?.message ?? crearCobro.error?.message}
             </p>
+          )}
+
+          {/* Atajo justo despues de guardar: facil que a la secretaria se
+              le olvide marcarlo tambien en el Odontograma si no se lo
+              recordamos aqui mismo, recien hecho. */}
+          {procedimientoGuardado && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-success-soft px-4 py-3 text-sm text-success">
+              <Check className="size-4 shrink-0" />
+              <span>Procedimiento guardado.</span>
+              <div className="ml-auto flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPestana("historial")}
+                >
+                  Ver en Historial
+                </Button>
+                <Button type="button" size="sm" onClick={() => setPestana("odontograma")}>
+                  Agregar al odontograma
+                </Button>
+              </div>
+            </div>
           )}
         </Section>
       )}
@@ -773,7 +837,10 @@ function FichaPaciente() {
                 type="button"
                 size="sm"
                 className="shrink-0"
-                onClick={() => setPestana("procedimientos")}
+                onClick={() => {
+                  setProcedimientoGuardado(false);
+                  setPestana("procedimientos");
+                }}
               >
                 <Plus /> Nuevo procedimiento
               </Button>
