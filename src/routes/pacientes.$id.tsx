@@ -38,7 +38,7 @@ import { Periodontograma } from "@/components/app/Periodontograma";
 import { GraficoPeriodontal } from "@/components/app/GraficoPeriodontal";
 import { IndicesPeriodontal } from "@/components/app/IndicesPeriodontal";
 import { edadDesde, formatDOP, normalizar } from "@/lib/format";
-import { enlaceLlamada, mensajeRecordatorio, saludo } from "@/lib/whatsapp";
+import { enlaceLlamada, mensajeComprobante, mensajeRecordatorio, saludo } from "@/lib/whatsapp";
 import { formatShortDate } from "@/lib/dates";
 import {
   BotonWhatsApp,
@@ -114,6 +114,18 @@ function FichaPaciente() {
   // mostrar el atajo de "agregar al odontograma" (facil que se le olvide
   // a la secretaria si no se lo recordamos ahi mismo).
   const [procedimientoGuardado, setProcedimientoGuardado] = useState(false);
+
+  // Comprobante del ultimo pago (de un procedimiento nuevo o de un abono),
+  // para poder mandarlo por WhatsApp justo despues de cobrar sin tener que
+  // ir a buscarlo. Se pisa cada vez que se registra un pago nuevo.
+  const [comprobante, setComprobante] = useState<{
+    tipo: "procedimiento" | "abono";
+    concepto: string;
+    monto: number;
+    metodo: Payment["method"];
+    fecha: string;
+    saldoRestante: number;
+  } | null>(null);
 
   // Abonar a un cargo que quedo debiendo (o parcial): se abre un
   // formulario chiquito justo debajo de esa fila, para no tener que
@@ -210,6 +222,10 @@ function FichaPaciente() {
         nota: notaCompleta,
       });
 
+      // Se limpia antes de guardar: si este procedimiento no tiene pago,
+      // no debe quedar pegado el comprobante de uno anterior.
+      setComprobante(null);
+
       if (montoCargo > 0) {
         // El cargo siempre se registra por el monto completo del
         // tratamiento — eso sube el saldo. Si se pago algo en el momento,
@@ -231,6 +247,14 @@ function FichaPaciente() {
             date: fechaNotaNueva,
             notes: "",
             cargo_id: cargoCreado.id,
+          });
+          setComprobante({
+            tipo: "procedimiento",
+            concepto: notaNueva.trim(),
+            monto: pagadoAhora,
+            metodo: metodoPagoCargo,
+            fecha: fechaNotaNueva,
+            saldoRestante: Math.max(0, montoCargo - pagadoAhora),
           });
         }
       }
@@ -271,6 +295,7 @@ function FichaPaciente() {
     setAbonandoCargoId(cargoId);
     setMontoAbono(sugerido);
     setMetodoAbono("efectivo");
+    setComprobante(null);
     crearCobro.reset();
   }
 
@@ -283,7 +308,11 @@ function FichaPaciente() {
   // termino de pagar, o se pago algo mas. No edita el cargo original —
   // agrega un cobro nuevo atado a el, igual que todo lo demas en el
   // sistema: nada se sobrescribe, se va acumulando.
-  async function registrarAbono(e: FormEvent, cargo: { id: string; concepto: string }) {
+  async function registrarAbono(
+    e: FormEvent,
+    cargo: { id: string; concepto: string },
+    restanteAntes: number,
+  ) {
     e.preventDefault();
     if (montoAbono <= 0) return;
     try {
@@ -295,6 +324,14 @@ function FichaPaciente() {
         date: hoyISO(),
         notes: "",
         cargo_id: cargo.id,
+      });
+      setComprobante({
+        tipo: "abono",
+        concepto: cargo.concepto,
+        monto: montoAbono,
+        metodo: metodoAbono,
+        fecha: hoyISO(),
+        saldoRestante: Math.max(0, restanteAntes - montoAbono),
       });
       cerrarAbono();
       await paciente.refetch();
@@ -677,6 +714,22 @@ function FichaPaciente() {
               <Check className="size-4 shrink-0" />
               <span>Procedimiento guardado.</span>
               <div className="ml-auto flex flex-wrap gap-2">
+                {comprobante?.tipo === "procedimiento" && (
+                  <BotonWhatsApp
+                    telefono={p.phone}
+                    size="sm"
+                    etiqueta="Enviar comprobante"
+                    mensaje={mensajeComprobante(
+                      p.name,
+                      nombreClinica,
+                      comprobante.concepto,
+                      formatDOP(comprobante.monto),
+                      comprobante.metodo,
+                      formatShortDate(comprobante.fecha),
+                      comprobante.saldoRestante > 0 ? formatDOP(comprobante.saldoRestante) : null,
+                    )}
+                  />
+                )}
                 <Button
                   type="button"
                   variant="outline"
@@ -927,6 +980,37 @@ function FichaPaciente() {
                 desde "Procedimientos" — aquí solo se ven y, si algo quedó a deber, se abona.
               </p>
 
+              {comprobante?.tipo === "abono" && (
+                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-success-soft px-4 py-3 text-sm text-success">
+                  <Check className="size-4 shrink-0" />
+                  <span>Abono registrado.</span>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <BotonWhatsApp
+                      telefono={p.phone}
+                      size="sm"
+                      etiqueta="Enviar comprobante"
+                      mensaje={mensajeComprobante(
+                        p.name,
+                        nombreClinica,
+                        comprobante.concepto,
+                        formatDOP(comprobante.monto),
+                        comprobante.metodo,
+                        formatShortDate(comprobante.fecha),
+                        comprobante.saldoRestante > 0 ? formatDOP(comprobante.saldoRestante) : null,
+                      )}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setComprobante(null)}
+                    >
+                      Cerrar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <div className="border-t border-border pt-2">
                 {listaCargos.length === 0 ? (
                   <p className="py-4 text-center text-sm text-muted-foreground">
@@ -1001,7 +1085,7 @@ function FichaPaciente() {
 
                           {abonandoCargoId === c.id && (
                             <form
-                              onSubmit={(e) => void registrarAbono(e, c)}
+                              onSubmit={(e) => void registrarAbono(e, c, restante)}
                               className="mt-3 flex flex-col gap-3 rounded-xl bg-muted/60 p-3"
                             >
                               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -141,3 +141,42 @@ export function mensajeNoAsistio(
     `¿Le gustaría que le agendemos una nueva fecha?`
   );
 }
+
+/** Como se lee cada forma de pago en un mensaje, con mayuscula inicial. */
+export const metodoPagoLabel: Record<string, string> = {
+  efectivo: "Efectivo",
+  tarjeta: "Tarjeta",
+  transferencia: "Transferencia",
+  seguro: "Seguro",
+};
+
+/**
+ * Comprobante de un cobro, para mandarlo por WhatsApp justo despues de
+ * cobrar — es lo mas parecido a un recibo que el paciente recibe en el
+ * momento, sin necesitar papel ni un PDF aparte.
+ *
+ * `montoTexto` y `saldoTexto` ya vienen formateados (por ejemplo con
+ * `formatDOP`), y `fechaTexto` con `formatShortDate`: este archivo no sabe
+ * de esos formatos, solo arma el texto final.
+ */
+export function mensajeComprobante(
+  nombre: string,
+  clinica: string,
+  concepto: string,
+  montoTexto: string,
+  metodo: string,
+  fechaTexto: string,
+  saldoTexto: string | null,
+): string {
+  const cierre = saldoTexto
+    ? `Saldo pendiente: ${saldoTexto}.`
+    : "Su cuenta quedó al día. ¡Gracias por su pago!";
+  return (
+    `${saludo(nombre, clinica)} Le confirmamos su pago:\n\n` +
+    `• Concepto: ${concepto}\n` +
+    `• Monto pagado: ${montoTexto}\n` +
+    `• Forma de pago: ${metodoPagoLabel[metodo] ?? metodo}\n` +
+    `• Fecha: ${fechaTexto}\n\n` +
+    `${cierre}`
+  );
+}
