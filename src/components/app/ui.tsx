@@ -228,7 +228,7 @@ export function StatCard({
   // Una tarjeta que lleva a algun lado tiene que parecerlo: cambia el cursor
   // y se levanta un poco al pasar por encima.
   const clase = cn(
-    "surface flex flex-col p-3.5",
+    "surface-warm flex flex-col p-3.5",
     to && "transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-soft",
   );
   const Caja = ({ children }: { children: ReactNode }) =>
