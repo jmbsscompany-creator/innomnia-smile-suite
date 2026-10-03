@@ -157,7 +157,7 @@ export function PageHeader({
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 rise-in">
       <div className="min-w-0">
-        <h1 className="text-[21px] font-bold leading-tight tracking-tight text-foreground sm:text-[24px]">
+        <h1 className="font-display text-[22px] font-semibold italic leading-tight tracking-tight text-foreground sm:text-[25px]">
           {title}
         </h1>
         {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
@@ -188,7 +188,7 @@ export function Section({
     <section className={cn("surface overflow-hidden", className)}>
       {title && (
         <header className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-2 sm:px-5">
-          <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+          <h2 className="font-display text-[17px] font-semibold italic tracking-tight">{title}</h2>
           {link && (
             <Link
               to={link}
