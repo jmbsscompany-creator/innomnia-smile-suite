@@ -12,7 +12,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import heroImg from "@/assets/clinic-hero.jpg";
 import { useAuth } from "@/lib/auth";
 import {
   hoyISO,
@@ -188,22 +187,18 @@ function Index() {
 
   return (
     <div className="space-y-4">
-      {/* Hero */}
-      <section className="surface rise-in relative overflow-hidden">
-        <img
-          src={heroImg}
-          alt=""
-          width={1536}
-          height={640}
-          className="absolute inset-y-0 right-0 h-full w-[70%] object-cover object-right opacity-90 sm:w-[60%] lg:w-[55%]"
-        />
-        <div className="hero-fade absolute inset-0" />
+      {/* Hero: marfil calido en vez de la foto de stock, con dos manchas de
+          color difusas como unico adorno — ver styles.css (--warm-*). */}
+      <section className="hero-warm rise-in relative overflow-hidden rounded-xl border border-border shadow-soft">
+        <div className="hero-blob-gold pointer-events-none absolute -top-10 -right-10 size-64 rounded-full" />
+        <div className="hero-blob-blue pointer-events-none absolute right-16 -bottom-16 size-44 rounded-full" />
         <div className="relative flex min-h-[112px] flex-col justify-center px-5 py-5 sm:px-6">
-          <h1 className="text-[22px] font-bold leading-tight tracking-tight sm:text-[26px]">
+          <span className="mb-3 block h-[3px] w-11 rounded-full bg-primary" />
+          <h1 className="font-display text-[26px] font-semibold italic leading-tight tracking-tight sm:text-[30px]">
             {saludo(ahora)}
             {nombre ? `, ${nombre}` : ""}
           </h1>
-          <p className="mt-1 max-w-[52ch] text-sm text-muted-foreground">
+          <p className="mt-1.5 max-w-[52ch] text-sm text-muted-foreground">
             Hoy es {fechaLarga(ahora)}.{" "}
             {cargando ? (
               "Revisando tu agenda..."

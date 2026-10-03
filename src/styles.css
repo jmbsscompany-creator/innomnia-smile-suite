@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500;1,9..144,600&display=swap");
 
 @custom-variant dark (&:is(.dark *));
 
@@ -12,6 +13,7 @@
 
 @theme inline {
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", ui-serif, serif;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -90,6 +92,14 @@
   --primary-foreground: oklch(1 0 0);
   --primary-soft: oklch(0.955 0.02 245);
   --primary-soft-foreground: oklch(0.5 0.14 252);
+
+  /* Marfil calido para el hero del dashboard: no es el blanco frio del
+     resto de la app a proposito, evoca el esmalte del odontograma y le da
+     un espacio con identidad propia, sin tocar el resto de las superficies. */
+  --warm-surface: oklch(0.965 0.015 80);
+  --warm-surface-to: oklch(0.94 0.025 70);
+  --warm-blob-gold: oklch(0.88 0.04 75);
+  --warm-blob-blue: oklch(0.9 0.03 235);
 
   --secondary: oklch(0.97 0.01 240);
   --secondary-foreground: oklch(0.35 0.04 255);
@@ -211,6 +221,21 @@
 
 @utility hero-fade {
   background: linear-gradient(90deg, var(--color-card) 0%, var(--color-card) 45%, transparent 100%);
+}
+
+/* Hero del dashboard: marfil calido en vez del blanco frio del resto de la
+   app, con dos manchas de color difusas (nunca formas literales) como unico
+   adorno. Ver src/styles.css --warm-* para los tonos. */
+@utility hero-warm {
+  background: linear-gradient(135deg, var(--warm-surface) 0%, var(--warm-surface-to) 100%);
+}
+
+@utility hero-blob-gold {
+  background: radial-gradient(circle at 35% 35%, var(--warm-blob-gold), transparent 70%);
+}
+
+@utility hero-blob-blue {
+  background: radial-gradient(circle at 35% 35%, var(--warm-blob-blue), transparent 70%);
 }
 
 @utility rise-in {

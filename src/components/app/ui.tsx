@@ -228,7 +228,7 @@ export function StatCard({
   // Una tarjeta que lleva a algun lado tiene que parecerlo: cambia el cursor
   // y se levanta un poco al pasar por encima.
   const clase = cn(
-    "surface flex items-center gap-3 p-3.5",
+    "surface flex flex-col p-3.5",
     to && "transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-soft",
   );
   const Caja = ({ children }: { children: ReactNode }) =>
@@ -241,32 +241,32 @@ export function StatCard({
     );
   return (
     <Caja>
-      <div className="icon-tile shrink-0">
-        <Icon className="size-4" strokeWidth={1.75} />
-      </div>
-      <div className="min-w-0">
+      {/* Sin burbuja de color de fondo: el icono es solo un trazo fino,
+          de apoyo, no el protagonista — el numero es lo que importa. */}
+      <div className="flex items-center justify-between gap-2">
         <p className="truncate text-xs text-muted-foreground">{label}</p>
+        <Icon className="size-[18px] shrink-0 text-border-strong" strokeWidth={1.75} />
+      </div>
+      <p
+        className={cn(
+          "font-display mt-1 font-semibold leading-none tracking-tight whitespace-nowrap",
+          value.length > 7 ? "text-lg" : "text-[22px]",
+        )}
+      >
+        {value}
+      </p>
+      {hint && (
         <p
           className={cn(
-            "mt-0.5 font-bold leading-none tracking-tight whitespace-nowrap",
-            value.length > 7 ? "text-lg" : "text-[22px]",
+            "mt-1.5 text-[13px]",
+            hintTone === "muted" && "text-muted-foreground",
+            hintTone === "success" && "text-success",
+            hintTone === "warning" && "text-warning",
           )}
         >
-          {value}
+          {hint}
         </p>
-        {hint && (
-          <p
-            className={cn(
-              "mt-1.5 text-[13px]",
-              hintTone === "muted" && "text-muted-foreground",
-              hintTone === "success" && "text-success",
-              hintTone === "warning" && "text-warning",
-            )}
-          >
-            {hint}
-          </p>
-        )}
-      </div>
+      )}
     </Caja>
   );
 }
