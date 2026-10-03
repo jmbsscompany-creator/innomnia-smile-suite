@@ -213,6 +213,34 @@ export type Producto = {
   updated_at: string;
 };
 
+export type TipoDocumento = "presupuesto" | "receta";
+
+/** Una linea de un documento: lo que se cotiza o se receta. */
+export type ItemDocumento = {
+  concepto: string;
+  /** Solo tiene sentido en un presupuesto. En una receta queda en null. */
+  precio: number | null;
+};
+
+/**
+ * Un presupuesto o una receta generados para un paciente, con su propia
+ * plantilla en PDF (con el logo y los datos de la clinica). Igual que
+ * cargos y notas_clinicas, es un historial: cada uno es su propia fila
+ * y ninguno se sobrescribe.
+ */
+export type Documento = {
+  id: string;
+  patient_id: string;
+  tipo: TipoDocumento;
+  fecha: string;
+  items: ItemDocumento[];
+  /** Suma de los items con precio. null en una receta. */
+  total: number | null;
+  notas: string;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type ActivityItem = {
   id: string;
   kind: string;
@@ -315,6 +343,12 @@ export type Database = {
         Row: Producto;
         Insert: Partial<Insertable<Producto>> & Pick<Producto, "nombre">;
         Update: Partial<Producto>;
+        Relationships: [];
+      };
+      documentos: {
+        Row: Documento;
+        Insert: Partial<Insertable<Documento>> & Pick<Documento, "patient_id" | "tipo" | "items">;
+        Update: Partial<Documento>;
         Relationships: [];
       };
     };

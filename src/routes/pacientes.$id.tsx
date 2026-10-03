@@ -5,14 +5,23 @@ import {
   CalendarDays,
   Check,
   ClipboardList,
+  Download,
   FileText,
   Phone,
   Plus,
+  Receipt,
+  Trash2,
   TriangleAlert,
   Wallet,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import type { Patient, Payment } from "@/lib/database.types";
+import type {
+  Documento,
+  ItemDocumento,
+  Patient,
+  Payment,
+  TipoDocumento,
+} from "@/lib/database.types";
 import {
   useActualizarPaciente,
   useAgregarNotaClinica,
@@ -22,7 +31,9 @@ import {
   useCobrosDePaciente,
   useCrearCargo,
   useCrearCobro,
+  useCrearDocumento,
   useCrearPeriodontograma,
+  useDocumentosDePaciente,
   useGuardarDientePerio,
   useHistorialOdontograma,
   useNotasClinicas,
@@ -38,8 +49,15 @@ import { Periodontograma } from "@/components/app/Periodontograma";
 import { GraficoPeriodontal } from "@/components/app/GraficoPeriodontal";
 import { IndicesPeriodontal } from "@/components/app/IndicesPeriodontal";
 import { edadDesde, formatDOP, normalizar } from "@/lib/format";
-import { enlaceLlamada, mensajeComprobante, mensajeRecordatorio, saludo } from "@/lib/whatsapp";
+import {
+  enlaceLlamada,
+  mensajeComprobante,
+  mensajeDocumento,
+  mensajeRecordatorio,
+  saludo,
+} from "@/lib/whatsapp";
 import { formatShortDate } from "@/lib/dates";
+import { descargarPDFDocumento } from "@/lib/pdf-documento";
 import {
   BotonWhatsApp,
   Button,
@@ -63,7 +81,8 @@ export const Route = createFileRoute("/pacientes/$id")({
   component: FichaPaciente,
 });
 
-type Pestana = "ficha" | "procedimientos" | "odontograma" | "periodontograma" | "historial";
+type Pestana =
+  "ficha" | "procedimientos" | "odontograma" | "periodontograma" | "historial" | "documentos";
 
 const tonoEstado = {
   activo: "success",
@@ -92,6 +111,8 @@ function FichaPaciente() {
   const guardar = useActualizarPaciente();
   const registrar = useRegistrarDiente();
   const clinica = useClinica();
+  const documentos = useDocumentosDePaciente(id);
+  const crearDocumento = useCrearDocumento();
 
   const [pestana, setPestana] = useState<Pestana>("ficha");
   const [form, setForm] = useState<Partial<Patient>>({});
@@ -126,6 +147,17 @@ function FichaPaciente() {
     fecha: string;
     saldoRestante: number;
   } | null>(null);
+
+  // Documentos (presupuestos y recetas): un formulario con lineas que se
+  // van agregando, igual que en Procedimientos. Al guardar, se genera el
+  // PDF de una vez y se descarga solo.
+  const [tipoDocNuevo, setTipoDocNuevo] = useState<TipoDocumento>("presupuesto");
+  const [fechaDocNueva, setFechaDocNueva] = useState(hoyISO());
+  const [itemsDocNuevo, setItemsDocNuevo] = useState<ItemDocumento[]>([
+    { concepto: "", precio: 0 },
+  ]);
+  const [notasDocNuevo, setNotasDocNuevo] = useState("");
+  const [documentoGuardado, setDocumentoGuardado] = useState<Documento | null>(null);
 
   // Abonar a un cargo que quedo debiendo (o parcial): se abre un
   // formulario chiquito justo debajo de esa fila, para no tener que
@@ -291,6 +323,101 @@ function FichaPaciente() {
     }
   }
 
+  function cambiarTipoDocNuevo(tipo: TipoDocumento) {
+    setTipoDocNuevo(tipo);
+    setDocumentoGuardado(null);
+    // Al pasar de receta a presupuesto el precio vuelve a tener sentido
+    // (arranca en 0); al reves, se apaga poniendolo en null.
+    setItemsDocNuevo((prev) =>
+      prev.map((it) => ({ ...it, precio: tipo === "presupuesto" ? (it.precio ?? 0) : null })),
+    );
+  }
+
+  function agregarLineaDoc() {
+    setItemsDocNuevo((prev) => [
+      ...prev,
+      { concepto: "", precio: tipoDocNuevo === "presupuesto" ? 0 : null },
+    ]);
+  }
+
+  function quitarLineaDoc(indice: number) {
+    setItemsDocNuevo((prev) => prev.filter((_, i) => i !== indice));
+  }
+
+  function cambiarPrecioItemDoc(indice: number, precio: number) {
+    setItemsDocNuevo((prev) => prev.map((it, i) => (i === indice ? { ...it, precio } : it)));
+  }
+
+  /**
+   * Igual que cambiarQueSeHizo: si lo escrito coincide con un servicio de
+   * la lista, rellena el precio solo (solo en un presupuesto, y solo si
+   * no se habia puesto nada a mano todavia).
+   */
+  function cambiarConceptoItemDoc(indice: number, texto: string) {
+    setItemsDocNuevo((prev) =>
+      prev.map((it, i) => {
+        if (i !== indice) return it;
+        if (tipoDocNuevo !== "presupuesto" || (it.precio ?? 0) > 0) {
+          return { ...it, concepto: texto };
+        }
+        const precioSugerido = precioPorNombreServicio.get(normalizar(texto));
+        return { ...it, concepto: texto, precio: precioSugerido ?? it.precio };
+      }),
+    );
+  }
+
+  async function guardarDocumento(e: FormEvent) {
+    e.preventDefault();
+    const itemsValidos = itemsDocNuevo
+      .map((it) => ({ ...it, concepto: it.concepto.trim() }))
+      .filter((it) => it.concepto);
+    if (itemsValidos.length === 0) return;
+
+    const total =
+      tipoDocNuevo === "presupuesto"
+        ? itemsValidos.reduce((s, it) => s + Number(it.precio ?? 0), 0)
+        : null;
+
+    try {
+      const creado = await crearDocumento.mutateAsync({
+        patient_id: id,
+        tipo: tipoDocNuevo,
+        fecha: fechaDocNueva,
+        items: itemsValidos,
+        total,
+        notas: notasDocNuevo.trim(),
+      });
+      descargarPDFDocumento({
+        tipo: creado.tipo,
+        fecha: creado.fecha,
+        pacienteNombre: p.name,
+        items: creado.items,
+        total: creado.total,
+        notas: creado.notas,
+        clinica: clinica.data ?? null,
+      });
+      setDocumentoGuardado(creado);
+      setItemsDocNuevo([{ concepto: "", precio: tipoDocNuevo === "presupuesto" ? 0 : null }]);
+      setNotasDocNuevo("");
+      setFechaDocNueva(hoyISO());
+    } catch {
+      // El error se muestra abajo, junto al formulario.
+    }
+  }
+
+  /** Para volver a bajar un documento que ya se habia generado antes. */
+  function descargarDocumentoDeNuevo(docu: Documento) {
+    descargarPDFDocumento({
+      tipo: docu.tipo,
+      fecha: docu.fecha,
+      pacienteNombre: p.name,
+      items: docu.items,
+      total: docu.total,
+      notas: docu.notas,
+      clinica: clinica.data ?? null,
+    });
+  }
+
   function abrirAbono(cargoId: string, sugerido: number) {
     setAbonandoCargoId(cargoId);
     setMontoAbono(sugerido);
@@ -408,6 +535,7 @@ function FichaPaciente() {
     { key: "odontograma", label: "Odontograma", icono: Check },
     { key: "periodontograma", label: "Periodontograma", icono: Activity },
     { key: "historial", label: "Historial", icono: CalendarDays },
+    { key: "documentos", label: "Documentos", icono: Receipt },
   ];
 
   return (
@@ -1187,6 +1315,203 @@ function FichaPaciente() {
             </Section>
           </div>
         </div>
+      )}
+
+      {/* ---------- DOCUMENTOS ---------- */}
+      {pestana === "documentos" && (
+        <Section title="Documentos">
+          <p className="mb-3 text-sm text-muted-foreground">
+            Presupuestos y recetas con los datos de la clínica, listos para imprimir o mandar por
+            WhatsApp en PDF.
+          </p>
+
+          <form
+            onSubmit={(e) => void guardarDocumento(e)}
+            className="flex flex-col gap-3 rounded-xl bg-muted/40 p-3 sm:p-4"
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {(["presupuesto", "receta"] as const).map((valor) => (
+                <button
+                  key={valor}
+                  type="button"
+                  onClick={() => cambiarTipoDocNuevo(valor)}
+                  className={cn(
+                    "h-9 shrink-0 rounded-lg border px-3.5 text-sm font-medium transition-colors",
+                    tipoDocNuevo === valor
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border-strong bg-card text-muted-foreground hover:border-primary/40 hover:text-primary",
+                  )}
+                >
+                  {valor === "presupuesto" ? "Presupuesto" : "Receta"}
+                </button>
+              ))}
+            </div>
+
+            <Field label="Fecha" className="max-w-[200px]">
+              <TextInput
+                type="date"
+                value={fechaDocNueva}
+                onChange={(e) => setFechaDocNueva(e.target.value)}
+              />
+            </Field>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-muted-foreground">
+                {tipoDocNuevo === "presupuesto" ? "Conceptos y precios" : "Indicaciones"}
+              </label>
+              {itemsDocNuevo.map((item, i) => (
+                <div key={i} className="flex gap-2">
+                  <TextInput
+                    className="min-w-0 flex-1"
+                    value={item.concepto}
+                    onChange={(e) => cambiarConceptoItemDoc(i, e.target.value)}
+                    placeholder={
+                      tipoDocNuevo === "presupuesto"
+                        ? "Ej: Limpieza dental"
+                        : "Ej: Amoxicilina 500mg, cada 8h por 7 días"
+                    }
+                    list={tipoDocNuevo === "presupuesto" ? "servicios-doc" : undefined}
+                  />
+                  {tipoDocNuevo === "presupuesto" && (
+                    <TextInput
+                      type="number"
+                      min={0}
+                      step={1}
+                      className="w-28 shrink-0"
+                      value={String(item.precio ?? 0)}
+                      onChange={(e) => cambiarPrecioItemDoc(i, Number(e.target.value))}
+                    />
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => quitarLineaDoc(i)}
+                    disabled={itemsDocNuevo.length === 1}
+                    aria-label="Quitar línea"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))}
+              {tipoDocNuevo === "presupuesto" && (
+                <datalist id="servicios-doc">
+                  {listaServicios.map((s) => (
+                    <option key={s.id} value={s.name} />
+                  ))}
+                </datalist>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-start"
+                onClick={agregarLineaDoc}
+              >
+                <Plus /> Agregar línea
+              </Button>
+            </div>
+
+            {tipoDocNuevo === "presupuesto" && (
+              <p className="text-right text-sm font-semibold">
+                Total: {formatDOP(itemsDocNuevo.reduce((s, it) => s + Number(it.precio ?? 0), 0))}
+              </p>
+            )}
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Notas (opcional)
+              </label>
+              <TextArea
+                value={notasDocNuevo}
+                onChange={(e) => setNotasDocNuevo(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="self-start"
+              disabled={
+                crearDocumento.isPending || itemsDocNuevo.every((it) => !it.concepto.trim())
+              }
+            >
+              {crearDocumento.isPending ? "Generando..." : "Guardar y generar PDF"}
+            </Button>
+            {crearDocumento.isError && (
+              <p role="alert" className="text-sm text-danger">
+                {crearDocumento.error.message}
+              </p>
+            )}
+          </form>
+
+          {documentoGuardado && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-success-soft px-4 py-3 text-sm text-success">
+              <Check className="size-4 shrink-0" />
+              <span>
+                {documentoGuardado.tipo === "presupuesto" ? "Presupuesto" : "Receta"} guardado y PDF
+                descargado.
+              </span>
+              <div className="ml-auto flex flex-wrap gap-2">
+                <BotonWhatsApp
+                  telefono={p.phone}
+                  size="sm"
+                  etiqueta="Enviar por WhatsApp"
+                  mensaje={mensajeDocumento(
+                    p.name,
+                    nombreClinica,
+                    documentoGuardado.tipo,
+                    formatShortDate(documentoGuardado.fecha),
+                  )}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="mb-2 text-sm font-semibold">Documentos anteriores</h3>
+            {documentos.isPending ? (
+              <div className="h-16 animate-pulse rounded-xl bg-muted" aria-hidden />
+            ) : (documentos.data ?? []).length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                Todavía no se ha generado ningún documento.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {(documentos.data ?? []).map((docu) => (
+                  <li key={docu.id} className="flex flex-wrap items-center gap-3 py-3">
+                    <Pill tone={docu.tipo === "presupuesto" ? "info" : "success"}>
+                      {docu.tipo === "presupuesto" ? "Presupuesto" : "Receta"}
+                    </Pill>
+                    <p className="min-w-0 flex-1 text-sm">{formatShortDate(docu.fecha)}</p>
+                    {docu.total !== null && (
+                      <p className="text-sm font-semibold tabular-nums">{formatDOP(docu.total)}</p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => descargarDocumentoDeNuevo(docu)}
+                    >
+                      <Download className="size-4" /> PDF
+                    </Button>
+                    <BotonWhatsApp
+                      telefono={p.phone}
+                      size="sm"
+                      etiqueta="WhatsApp"
+                      mensaje={mensajeDocumento(
+                        p.name,
+                        nombreClinica,
+                        docu.tipo,
+                        formatShortDate(docu.fecha),
+                      )}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Section>
       )}
     </div>
   );

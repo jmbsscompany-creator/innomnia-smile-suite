@@ -9,6 +9,8 @@ import type {
   Cargo,
   ClinicSettings,
   Dentist,
+  Documento,
+  ItemDocumento,
   NotaClinica,
   OdontogramEntry,
   Patient,
@@ -18,6 +20,7 @@ import type {
   Producto,
   Profile,
   Service,
+  TipoDocumento,
 } from "@/lib/database.types";
 
 /** Traduce los errores de la base, que vienen en ingles. */
@@ -996,6 +999,62 @@ export function useEliminarProducto() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: CLAVE_PRODUCTOS });
+    },
+  });
+}
+
+/* ==========================================================
+   DOCUMENTOS (presupuestos y recetas)
+
+   Una plantilla imprimible/por WhatsApp con el logo y los datos de la
+   clinica. Igual que cargos y notas_clinicas, es un historial: cada
+   documento es su propia fila con fecha, y ninguno se edita — si algo
+   cambio, se hace un documento nuevo.
+   ========================================================== */
+
+export const CLAVE_DOCUMENTOS = ["documentos"] as const;
+
+/** Documentos de un paciente, el mas reciente primero. */
+export function useDocumentosDePaciente(pacienteId: string) {
+  return useQuery({
+    queryKey: [...CLAVE_DOCUMENTOS, "paciente", pacienteId],
+    queryFn: async (): Promise<Documento[]> => {
+      const { data, error } = await supabase
+        .from("documentos")
+        .select("*")
+        .eq("patient_id", pacienteId)
+        .order("fecha", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return (data ?? []) as Documento[];
+    },
+  });
+}
+
+export interface NuevoDocumento {
+  patient_id: string;
+  tipo: TipoDocumento;
+  fecha: string;
+  items: ItemDocumento[];
+  /** Suma de los items con precio. null en una receta. */
+  total: number | null;
+  notas: string;
+}
+
+export function useCrearDocumento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nuevo: NuevoDocumento): Promise<Documento> => {
+      const { data, error } = await supabase
+        .from("documentos")
+        .insert(nuevo as never)
+        .select()
+        .single();
+      if (error) throw new Error(traducirErrorDB(error.message));
+      return data as Documento;
+    },
+    onSuccess: (_r, args) => {
+      void qc.invalidateQueries({ queryKey: [...CLAVE_DOCUMENTOS, "paciente", args.patient_id] });
     },
   });
 }

@@ -159,6 +159,25 @@ export const metodoPagoLabel: Record<string, string> = {
  * `formatDOP`), y `fechaTexto` con `formatShortDate`: este archivo no sabe
  * de esos formatos, solo arma el texto final.
  */
+/**
+ * Para cuando se le acaba de mandar un presupuesto o una receta. El PDF
+ * no se puede adjuntar solo desde un enlace de WhatsApp — eso solo lo
+ * hace la API oficial de WhatsApp Business, que es cara y compleja de
+ * meter — asi que este mensaje avisa que el PDF se adjunta a mano, justo
+ * despues de abrir el chat.
+ */
+export function mensajeDocumento(
+  nombre: string,
+  clinica: string,
+  tipoTexto: string,
+  fechaTexto: string,
+): string {
+  return (
+    `${saludo(nombre, clinica)} Le compartimos su ${tipoTexto} del ${fechaTexto}. ` +
+    `Le adjuntamos el PDF en este chat.`
+  );
+}
+
 export function mensajeComprobante(
   nombre: string,
   clinica: string,
