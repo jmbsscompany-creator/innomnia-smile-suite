@@ -226,9 +226,10 @@ export function StatCard({
   search?: LinkProps["search"];
 }) {
   // Una tarjeta que lleva a algun lado tiene que parecerlo: cambia el cursor
-  // y se levanta un poco al pasar por encima.
+  // y se levanta un poco al pasar por encima. Mas compacta que antes: el
+  // numero no necesita tanto aire alrededor para leerse bien.
   const clase = cn(
-    "surface flex flex-col p-3.5",
+    "surface flex flex-col p-2.5",
     to && "transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-soft",
   );
   const Caja = ({ children }: { children: ReactNode }) =>
@@ -244,13 +245,13 @@ export function StatCard({
       {/* Sin burbuja de color de fondo: el icono es solo un trazo fino,
           de apoyo, no el protagonista — el numero es lo que importa. */}
       <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-xs text-muted-foreground">{label}</p>
-        <Icon className="size-[18px] shrink-0 text-border-strong" strokeWidth={1.75} />
+        <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+        <Icon className="size-[15px] shrink-0 text-border-strong" strokeWidth={1.75} />
       </div>
       <p
         className={cn(
-          "font-display mt-1 font-semibold leading-none tracking-tight whitespace-nowrap",
-          value.length > 7 ? "text-lg" : "text-[22px]",
+          "font-display mt-0.5 font-semibold leading-none tracking-tight whitespace-nowrap",
+          value.length > 7 ? "text-base" : "text-lg",
         )}
       >
         {value}
@@ -258,7 +259,7 @@ export function StatCard({
       {hint && (
         <p
           className={cn(
-            "mt-1.5 text-[13px]",
+            "mt-1 truncate text-[11px]",
             hintTone === "muted" && "text-muted-foreground",
             hintTone === "success" && "text-success",
             hintTone === "warning" && "text-warning",

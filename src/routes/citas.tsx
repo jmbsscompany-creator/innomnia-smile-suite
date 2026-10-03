@@ -12,7 +12,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Appointment } from "@/lib/database.types";
 import {
   useActualizarCita,
@@ -60,6 +60,11 @@ export const Route = createFileRoute("/citas")({
       { property: "og:title", content: title },
       { property: "og:description", content: description },
     ],
+  }),
+  // Permite llegar aqui con el modal de "Nueva cita" ya abierto (el boton
+  // del inicio enlaza a /citas?nueva=1 en vez de duplicar el formulario ahi).
+  validateSearch: (search: Record<string, unknown>): { nueva: boolean } => ({
+    nueva: search["nueva"] === true || search["nueva"] === "1" || search["nueva"] === "true",
   }),
   component: AppointmentsPage,
 });
@@ -131,6 +136,7 @@ const FORM_VACIO: Omit<NuevaCita, "date"> = {
 };
 
 function AppointmentsPage() {
+  const { nueva } = Route.useSearch();
   const [semana, setSemana] = useState(0);
   const [vista, setVista] = useState<"día" | "semana">("día");
   const [seleccionado, setSeleccionado] = useState(() => aISO(new Date()));
@@ -150,6 +156,12 @@ function AppointmentsPage() {
   // confirmar, cancelar, etc. — bien explicados, no iconos sueltos).
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [confirmarCancelar, setConfirmarCancelar] = useState<string | null>(null);
+
+  // Si se llego aqui desde "Nueva cita" del inicio (/citas?nueva=1), abre el
+  // modal de una vez en vez de obligar a buscar el boton.
+  useEffect(() => {
+    if (nueva) setAbierto(true);
+  }, [nueva]);
 
   const lunes = useMemo(() => lunesDe(semana), [semana]);
   const dias = useMemo(() => Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i)), [lunes]);

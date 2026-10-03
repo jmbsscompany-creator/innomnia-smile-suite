@@ -6,6 +6,8 @@ import {
   DollarSign,
   FileText,
   Plus,
+  TrendingDown,
+  TrendingUp,
   TriangleAlert,
   UserPlus,
   Users,
@@ -19,6 +21,7 @@ import {
   useCitasDelDia,
   useClinica,
   useCobrosDelDia,
+  useCobrosMensuales,
   useCrearCobro,
   usePacientes,
   type NuevoCobro,
@@ -27,6 +30,7 @@ import { formatDOP } from "@/lib/format";
 import {
   BotonWhatsApp,
   Button,
+  buttonVariants,
   InitialsAvatar,
   Pill,
   Section,
@@ -99,6 +103,31 @@ function primerNombre(completo: string) {
   return partes[0] ?? completo;
 }
 
+/**
+ * Compara el total cobrado este mes contra el mes pasado y muestra la
+ * diferencia como una pildora pequeña (sube/baja/igual). Sin mes pasado
+ * con que comparar (clinica nueva), no hay diferencia que mostrar.
+ */
+function TendenciaMensual({ actual, anterior }: { actual: number; anterior: number }) {
+  if (anterior === 0) {
+    if (actual === 0) return null;
+    return (
+      <Pill tone="success" className="gap-1">
+        <TrendingUp className="size-3.5" /> Primer mes con cobros
+      </Pill>
+    );
+  }
+  const cambio = ((actual - anterior) / anterior) * 100;
+  const sube = cambio >= 0;
+  return (
+    <Pill tone={sube ? "success" : "danger"} className="gap-1">
+      {sube ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
+      {sube ? "+" : ""}
+      {cambio.toFixed(0)}% vs mes pasado
+    </Pill>
+  );
+}
+
 const COBRO_VACIO: Omit<NuevoCobro, "date"> = {
   patient_id: null,
   concept: "",
@@ -115,6 +144,7 @@ function Index() {
   const pacientes = usePacientes();
   const citas = useCitasDelDia(hoy);
   const cobros = useCobrosDelDia(hoy);
+  const mensual = useCobrosMensuales(hoy);
   const actividad = useActividad();
   const clinica = useClinica();
   const crearCobro = useCrearCobro();
@@ -272,6 +302,22 @@ function Index() {
         />
       </div>
 
+      {/* Tendencia: cuanto se ha cobrado este mes contra el pasado. Compacta,
+          aprovechando el espacio que dejaron las tarjetas de arriba al
+          achicarse. Mas adelante esto puede llevar a una pestaña de
+          Métricas con el detalle mes por mes. */}
+      <div className="surface flex flex-wrap items-center justify-between gap-3 p-3">
+        <div>
+          <p className="text-[11px] text-muted-foreground">Cobrado este mes</p>
+          <p className="font-display mt-0.5 text-lg font-semibold tracking-tight">
+            {mensual.isPending ? "—" : formatDOP(mensual.data?.esteMes ?? 0)}
+          </p>
+        </div>
+        {!mensual.isPending && mensual.data && (
+          <TendenciaMensual actual={mensual.data.esteMes} anterior={mensual.data.mesPasado} />
+        )}
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         {/* Agenda */}
         <Section title="Agenda de hoy" link="/citas" linkLabel="Ver agenda completa">
@@ -362,9 +408,16 @@ function Index() {
               })}
             </ol>
           )}
-          <Button size="lg" className="mt-5 w-full" disabled>
+          {/* Antes estaba deshabilitado porque esto nunca se habia construido.
+              En vez de duplicar el formulario completo de /citas aqui, enlaza
+              ahi mismo con el modal ya abierto. */}
+          <Link
+            to="/citas"
+            search={{ nueva: true }}
+            className={cn(buttonVariants({ size: "lg" }), "mt-5 w-full")}
+          >
             <Plus /> Nueva cita
-          </Button>
+          </Link>
         </Section>
 
         <div className="space-y-4">

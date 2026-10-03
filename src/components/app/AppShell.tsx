@@ -82,12 +82,12 @@ function SidebarContent({ compact, onNavigate }: { compact: boolean; onNavigate?
                 "group relative flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-colors",
                 compact ? "size-10 justify-center" : "px-3.5",
                 active
-                  ? "bg-primary-soft text-primary"
+                  ? "bg-success-soft text-success"
                   : "text-sidebar-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               {active && !compact && (
-                <span className="absolute -left-3 top-2.5 bottom-2.5 w-1 rounded-r-full bg-primary" />
+                <span className="absolute -left-3 top-2.5 bottom-2.5 w-1 rounded-r-full bg-success" />
               )}
               <item.icon className="size-5 shrink-0" strokeWidth={1.75} />
               {!compact && <span className="truncate">{item.label}</span>}
@@ -99,20 +99,20 @@ function SidebarContent({ compact, onNavigate }: { compact: boolean; onNavigate?
       <div className="mt-auto relative">
         {!compact && (
           <div className="relative z-10 px-5 pb-5">
-            <ToothMark className="size-9 text-primary/80" />
-            <p className="mt-4 text-[22px] font-medium leading-tight text-primary-soft-foreground/85">
+            <ToothMark className="size-9 text-success/80" />
+            <p className="mt-4 text-[22px] font-medium leading-tight text-success/85">
               Sonrisas
               <br />
               que crecen
               <br />
               contigo
             </p>
-            <span className="mt-4 block h-0.5 w-6 rounded bg-primary" />
+            <span className="mt-4 block h-0.5 w-6 rounded bg-success" />
           </div>
         )}
         <svg
           viewBox="0 0 240 260"
-          className="pointer-events-none absolute inset-x-0 bottom-0 w-full text-primary-soft"
+          className="pointer-events-none absolute inset-x-0 bottom-0 w-full text-success-soft"
           preserveAspectRatio="none"
           aria-hidden
         >

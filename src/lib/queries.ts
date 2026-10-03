@@ -430,6 +430,42 @@ export function useCobrosDelDia(fecha: string) {
   });
 }
 
+/**
+ * Total cobrado este mes y el pasado, para ver si la clinica esta
+ * subiendo o bajando. Una sola consulta que trae ambos meses y los
+ * separa aqui mismo, en vez de pedirlos por separado.
+ */
+export function useCobrosMensuales(fechaISO: string) {
+  const [anio, mes] = fechaISO.split("-").map(Number) as [number, number];
+  const inicioMesPasado = new Date(Date.UTC(anio, mes - 2, 1));
+  const inicioMesSiguiente = new Date(Date.UTC(anio, mes, 1));
+  const desde = inicioMesPasado.toISOString().slice(0, 10);
+  const hasta = inicioMesSiguiente.toISOString().slice(0, 10);
+  const prefijoEsteMes = fechaISO.slice(0, 7);
+  const prefijoMesPasado = desde.slice(0, 7);
+
+  return useQuery({
+    queryKey: [...CLAVE_COBROS, "mensual", desde, hasta],
+    queryFn: async (): Promise<{ esteMes: number; mesPasado: number }> => {
+      const { data, error } = await supabase
+        .from("payments")
+        .select("amount, date")
+        .gte("date", desde)
+        .lt("date", hasta);
+      if (error) throw new Error(traducirErrorDB(error.message));
+
+      let esteMes = 0;
+      let mesPasado = 0;
+      for (const p of data ?? []) {
+        const monto = Number(p.amount);
+        if (p.date.startsWith(prefijoEsteMes)) esteMes += monto;
+        else if (p.date.startsWith(prefijoMesPasado)) mesPasado += monto;
+      }
+      return { esteMes, mesPasado };
+    },
+  });
+}
+
 export interface NuevoCobro {
   patient_id: string | null;
   concept: string;
