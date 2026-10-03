@@ -93,13 +93,24 @@
   --primary-soft: oklch(0.955 0.02 245);
   --primary-soft-foreground: oklch(0.5 0.14 252);
 
-  /* Marfil calido para el hero del dashboard: no es el blanco frio del
-     resto de la app a proposito, evoca el esmalte del odontograma y le da
-     un espacio con identidad propia, sin tocar el resto de las superficies. */
+  /* Marfil calido: primer intento para el hero del dashboard, probado y
+     descartado (no pegaba con "clinica dental"). Se queda declarado por si
+     hace falta en otra parte, pero el hero ya no lo usa. */
   --warm-surface: oklch(0.965 0.015 80);
   --warm-surface-to: oklch(0.94 0.025 70);
   --warm-blob-gold: oklch(0.88 0.04 75);
   --warm-blob-blue: oklch(0.9 0.03 235);
+
+  /* Menta suave para el hero del dashboard: el mismo turquesa de
+     --odo-sellante (ya usado en el odontograma para marcar "preventivo"),
+     muy aclarado. No es un color nuevo inventado, es parte de la paleta
+     que ya existe en el producto — y menta/turquesa es la asociacion que
+     la gente ya tiene con "limpieza dental". */
+  --mint-surface: oklch(0.965 0.02 175);
+  --mint-surface-to: oklch(0.935 0.035 172);
+  --mint-blob-1: oklch(0.88 0.05 172);
+  --mint-blob-2: oklch(0.9 0.03 235);
+  --mint-accent: oklch(0.58 0.1 178);
 
   --secondary: oklch(0.97 0.01 240);
   --secondary-foreground: oklch(0.35 0.04 255);
@@ -233,9 +244,8 @@
   background: linear-gradient(90deg, var(--color-card) 0%, var(--color-card) 45%, transparent 100%);
 }
 
-/* Hero del dashboard: marfil calido en vez del blanco frio del resto de la
-   app, con dos manchas de color difusas (nunca formas literales) como unico
-   adorno. Ver src/styles.css --warm-* para los tonos. */
+/* Hero del dashboard: marfil calido, descartado (ver --warm-* arriba). Clase
+   sin usar, se deja declarada en vez de borrada por si hace falta volver. */
 @utility hero-warm {
   background: linear-gradient(135deg, var(--warm-surface) 0%, var(--warm-surface-to) 100%);
 }
@@ -246,6 +256,21 @@
 
 @utility hero-blob-blue {
   background: radial-gradient(circle at 35% 35%, var(--warm-blob-blue), transparent 70%);
+}
+
+/* Hero del dashboard: menta suave en vez del blanco frio del resto de la
+   app, con dos manchas de color difusas (nunca formas literales) como unico
+   adorno. Ver --mint-* arriba. */
+@utility hero-mint {
+  background: linear-gradient(135deg, var(--mint-surface) 0%, var(--mint-surface-to) 100%);
+}
+
+@utility hero-blob-mint {
+  background: radial-gradient(circle at 35% 35%, var(--mint-blob-1), transparent 70%);
+}
+
+@utility hero-blob-mint-blue {
+  background: radial-gradient(circle at 35% 35%, var(--mint-blob-2), transparent 70%);
 }
 
 @utility rise-in {

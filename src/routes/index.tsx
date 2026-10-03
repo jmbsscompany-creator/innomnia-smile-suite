@@ -187,13 +187,14 @@ function Index() {
 
   return (
     <div className="space-y-4">
-      {/* Hero: marfil calido en vez de la foto de stock, con dos manchas de
-          color difusas como unico adorno — ver styles.css (--warm-*). */}
-      <section className="hero-warm rise-in relative overflow-hidden rounded-xl border border-border shadow-soft">
-        <div className="hero-blob-gold pointer-events-none absolute -top-10 -right-10 size-64 rounded-full" />
-        <div className="hero-blob-blue pointer-events-none absolute right-16 -bottom-16 size-44 rounded-full" />
+      {/* Hero: menta suave en vez de la foto de stock, con dos manchas de
+          color difusas como unico adorno — ver styles.css (--mint-*). Es el
+          mismo turquesa de --odo-sellante (preventivo) del odontograma. */}
+      <section className="hero-mint rise-in relative overflow-hidden rounded-xl border border-border shadow-soft">
+        <div className="hero-blob-mint pointer-events-none absolute -top-10 -right-10 size-64 rounded-full" />
+        <div className="hero-blob-mint-blue pointer-events-none absolute right-16 -bottom-16 size-44 rounded-full" />
         <div className="relative flex min-h-[112px] flex-col justify-center px-5 py-5 sm:px-6">
-          <span className="mb-3 block h-[3px] w-11 rounded-full bg-primary" />
+          <span className="mb-3 block h-[3px] w-11 rounded-full bg-[var(--mint-accent)]" />
           <h1 className="font-display text-[26px] font-semibold italic leading-tight tracking-tight sm:text-[30px]">
             {saludo(ahora)}
             {nombre ? `, ${nombre}` : ""}
