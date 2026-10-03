@@ -388,6 +388,7 @@ function FichaPaciente() {
         notas: notasDocNuevo.trim(),
       });
       descargarPDFDocumento({
+        id: creado.id,
         tipo: creado.tipo,
         fecha: creado.fecha,
         pacienteNombre: p.name,
@@ -408,6 +409,7 @@ function FichaPaciente() {
   /** Para volver a bajar un documento que ya se habia generado antes. */
   function descargarDocumentoDeNuevo(docu: Documento) {
     descargarPDFDocumento({
+      id: docu.id,
       tipo: docu.tipo,
       fecha: docu.fecha,
       pacienteNombre: p.name,
